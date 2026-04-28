@@ -12,8 +12,26 @@
         android:orientation="vertical"
         android:padding="16dp">
 
+        <TextView
+            android:id="@+id/textStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="48dp"
+            android:gravity="center"
+            android:text="@string/initializing"
+            android:textColor="?android:textColorPrimary"
+            android:textSize="16sp"
+            android:visibility="visible" />
+
         <LinearLayout
-            android:id="@+id/layoutSub0"
+            android:id="@+id/contentArea"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/layoutSub0"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
@@ -104,6 +122,8 @@
                 android:textAllCaps="false" />
 
         </LinearLayout>
+
+        </LinearLayout><!-- end contentArea -->
 
     </LinearLayout>
 

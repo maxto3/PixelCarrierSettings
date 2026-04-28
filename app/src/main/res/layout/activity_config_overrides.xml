@@ -19,60 +19,20 @@
             android:textStyle="bold"
             android:layout_marginBottom="8dp" />
 
-        <Button
-            android:id="@+id/btnOverrideVoLTE"
+        <TextView
+            android:id="@+id/textProgress"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/override_volte"
-            android:textAllCaps="false" />
+            android:layout_marginBottom="8dp"
+            android:textColor="?android:textColorPrimary"
+            android:textSize="16sp"
+            android:visibility="gone" />
 
         <Button
-            android:id="@+id/btnOverrideNRMode"
+            android:id="@+id/btnEnableAll"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/override_nr_mode"
-            android:textAllCaps="false" />
-
-        <Button
-            android:id="@+id/btnOverrideVoNR"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/override_vonr"
-            android:textAllCaps="false" />
-
-        <Button
-            android:id="@+id/btnOverrideWFC"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/override_wfc"
-            android:textAllCaps="false" />
-
-        <Button
-            android:id="@+id/btnOverride5GSignalThreshold"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/override_5g_signal_threshold"
-            android:textAllCaps="false" />
-
-        <Button
-            android:id="@+id/btnSignalInflate"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/signal_inflate"
-            android:textAllCaps="false" />
-
-        <Button
-            android:id="@+id/btnShowIMSStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/show_ims_status"
-            android:textAllCaps="false" />
-
-        <Button
-            android:id="@+id/btnShow4G"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/show_4g_instead"
+            android:text="@string/enable_all_features"
             android:textAllCaps="false" />
 
         <Button
@@ -81,6 +41,78 @@
             android:layout_height="wrap_content"
             android:text="@string/reset_config"
             android:textAllCaps="false" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/status_title"
+            android:textStyle="bold"
+            android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/textStatusVolte"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textSize="14sp"
+            android:text="@string/initializing" />
+
+        <TextView
+            android:id="@+id/textStatusNrSa"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textSize="14sp"
+            android:text="@string/initializing" />
+
+        <TextView
+            android:id="@+id/textStatusVonr"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textSize="14sp"
+            android:text="@string/initializing" />
+
+        <TextView
+            android:id="@+id/textStatusWfc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textSize="14sp"
+            android:text="@string/initializing" />
+
+        <TextView
+            android:id="@+id/textStatus5gThreshold"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textSize="14sp"
+            android:text="@string/initializing" />
+
+        <TextView
+            android:id="@+id/textStatusSignalInflate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textSize="14sp"
+            android:text="@string/initializing" />
+
+        <TextView
+            android:id="@+id/textStatusImsStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textSize="14sp"
+            android:text="@string/initializing" />
+
+        <TextView
+            android:id="@+id/textStatusShow4g"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textSize="14sp"
+            android:text="@string/initializing" />
 
     </LinearLayout>
 

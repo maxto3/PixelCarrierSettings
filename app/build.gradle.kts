@@ -45,7 +45,8 @@ android {
 }
 
 dependencies {
-    implementation(libs.shizuku.api)
-    implementation(libs.shizuku.provider)
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.libsu.core)
+    implementation(libs.libsu.service)
     implementation(libs.hiddenapibypass)
 }
