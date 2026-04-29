@@ -183,12 +183,31 @@ class ConfigOverridesActivity : Activity() {
     }
 
     private fun applyOverrides(svc: ICarrierConfigRootService, overrides: PersistableBundle?): Boolean {
-        return svc.overrideCarrierConfig(subId, overrides, false)
+        val persist = binding.switchPersist.isChecked
+        val success = try {
+            svc.overrideCarrierConfig(subId, overrides, persist)
+        } catch (_: Exception) {
+            false
+        }
+
+        // If persist is enabled, also save to local storage as fallback
+        if (persist) {
+            if (overrides != null) {
+                CarrierConfigPersistence.saveOverrides(this, subId, overrides)
+            } else {
+                // Reset: clear persisted overrides
+                CarrierConfigPersistence.clearOverrides(this, subId)
+            }
+        }
+
+        return success
     }
 
     private fun resetConfig() {
         val svc = ensureService() ?: return
         applyOverrides(svc, null)
+        // Always clear local persistence on reset
+        CarrierConfigPersistence.clearOverrides(this, subId)
         showToast(R.string.config_reset)
         resetAllStatuses()
     }

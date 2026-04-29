@@ -19,6 +19,28 @@
             android:textStyle="bold"
             android:layout_marginBottom="8dp" />
 
+        <Switch
+            android:id="@+id/switchPersist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/persist_after_reboot"
+            android:paddingVertical="8dp"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/persist_after_reboot_summary"
+            android:textSize="12sp"
+            android:textColor="?android:textColorSecondary"
+            android:layout_marginBottom="12dp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="?android:dividerHorizontal"
+            android:layout_marginBottom="8dp" />
+
         <TextView
             android:id="@+id/textProgress"
             android:layout_width="match_parent"
