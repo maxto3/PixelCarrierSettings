@@ -68,4 +68,8 @@
     <string name="step_signal_inflate_fail">Signal Inflate failed</string>
     <string name="step_ims_status_fail">IMS status failed</string>
     <string name="step_show_4g_fail">Show 4G icon failed</string>
+    <string name="restoration_notification_channel">Carrier config restoration</string>
+    <string name="restoration_notification_channel_desc">Shows while carrier config overrides are being reapplied</string>
+    <string name="restoration_notification_title">Re-applying carrier config</string>
+    <string name="restoration_notification_text">Restoring saved overrides…</string>
 </resources>

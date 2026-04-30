@@ -4,6 +4,9 @@
 
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
         android:allowBackup="true"
@@ -34,7 +37,8 @@
         <service
             android:name=".RestorationService"
             android:exported="false"
-            android:directBootAware="true" />
+            android:directBootAware="true"
+            android:foregroundServiceType="dataSync" />
 
         <receiver
             android:name=".CarrierConfigReceiver"
@@ -44,7 +48,6 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.telephony.action.CARRIER_CONFIG_CHANGED" />
-                <action android:name="me.ikirby.pixelutils.DELAYED_RESTORE" />
             </intent-filter>
         </receiver>    </application>
 </manifest>

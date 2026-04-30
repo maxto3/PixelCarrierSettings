@@ -227,7 +227,9 @@ class ConfigOverridesActivity : Activity() {
         if (overrides == null) {
             CarrierConfigPersistence.clearOverrides(this, subId)
         } else if (persist) {
-            CarrierConfigPersistence.saveOverrides(this, subId, overrides, merge = true)
+            // Save the fully merged bundle to ensure all accumulated overrides persist.
+            // Using merge=false because mergedOverrides already contains the complete state.
+            CarrierConfigPersistence.saveOverrides(this, subId, mergedOverrides, merge = false)
         }
 
         return success
