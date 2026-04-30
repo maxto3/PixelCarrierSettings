@@ -28,14 +28,23 @@
         <service
             android:name=".CarrierConfigRootService"
             android:exported="false"
+            android:directBootAware="true"
             tools:ignore="Instantiatable" />
 
+        <service
+            android:name=".RestorationService"
+            android:exported="false"
+            android:directBootAware="true" />
+
         <receiver
-            android:name=".BootReceiver"
-            android:exported="true">
+            android:name=".CarrierConfigReceiver"
+            android:exported="true"
+            android:directBootAware="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.telephony.action.CARRIER_CONFIG_CHANGED" />
+                <action android:name="me.ikirby.pixelutils.DELAYED_RESTORE" />
             </intent-filter>
-        </receiver>
-    </application>
+        </receiver>    </application>
 </manifest>

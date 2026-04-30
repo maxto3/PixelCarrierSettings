@@ -58,6 +58,9 @@ class ConfigOverridesActivity : Activity() {
         title = intent.getStringExtra("displayName") ?: ""
         actionBar?.setDisplayHomeAsUpEnabled(true)
 
+        // Initialize persist switch state based on whether we already have saved overrides
+        binding.switchPersist.isChecked = CarrierConfigPersistence.hasSavedOverrides(this, subId)
+
         // Initialize feature statuses (order must match enableAllFeatures steps)
         featureStatuses["volte"] = FeatureStatus(R.string.feat_volte_label, statusView = { binding.textStatusVolte })
         featureStatuses["nr_sa"] = FeatureStatus(R.string.feat_nr_sa_label, statusView = { binding.textStatusNrSa })
@@ -182,25 +185,70 @@ class ConfigOverridesActivity : Activity() {
         }
     }
 
+    private val sessionOverrides = PersistableBundle()
+
     private fun applyOverrides(svc: ICarrierConfigRootService, overrides: PersistableBundle?): Boolean {
         val persist = binding.switchPersist.isChecked
+
+        // Always try to merge with our own local source of truth.
+        // We use 'sessionOverrides' to stack features during the current session,
+        // and 'CarrierConfigPersistence' for cross-reboot storage.
+        val mergedOverrides = if (overrides != null) {
+            // First, load what we already have on disk (if any)
+            val base = CarrierConfigPersistence.loadOverrides(this, subId) ?: PersistableBundle()
+
+            // Then, add the session-accumulated overrides
+            for (key in sessionOverrides.keySet()) {
+                @Suppress("DEPRECATION")
+                putInBundle(base, key, sessionOverrides.get(key))
+            }
+
+            // Finally, add the current new overrides and update the session accumulator
+            for (key in overrides.keySet()) {
+                @Suppress("DEPRECATION")
+                val value = overrides.get(key)
+                putInBundle(base, key, value)
+                putInBundle(sessionOverrides, key, value)
+            }
+            base
+        } else {
+            sessionOverrides.clear()
+            null // Reset case
+        }
+
         val success = try {
-            svc.overrideCarrierConfig(subId, overrides, persist)
+            // persistent=true is restricted to system apps; we use SharedPreferences + BootReceiver instead.
+            svc.overrideCarrierConfig(subId, mergedOverrides, false)
         } catch (_: Exception) {
             false
         }
 
-        // If persist is enabled, also save to local storage as fallback
-        if (persist) {
-            if (overrides != null) {
-                CarrierConfigPersistence.saveOverrides(this, subId, overrides)
-            } else {
-                // Reset: clear persisted overrides
-                CarrierConfigPersistence.clearOverrides(this, subId)
-            }
+        // Handle persistence
+        if (overrides == null) {
+            CarrierConfigPersistence.clearOverrides(this, subId)
+        } else if (persist) {
+            CarrierConfigPersistence.saveOverrides(this, subId, overrides, merge = true)
         }
 
         return success
+    }
+
+    private fun putInBundle(bundle: PersistableBundle, key: String, value: Any?) {
+        when (value) {
+            is Boolean -> bundle.putBoolean(key, value)
+            is Int -> bundle.putInt(key, value)
+            is Long -> bundle.putLong(key, value)
+            is Double -> bundle.putDouble(key, value)
+            is String -> bundle.putString(key, value)
+            is BooleanArray -> bundle.putBooleanArray(key, value)
+            is IntArray -> bundle.putIntArray(key, value)
+            is LongArray -> bundle.putLongArray(key, value)
+            is DoubleArray -> bundle.putDoubleArray(key, value)
+            is Array<*> -> if (value.all { it is String? }) {
+                @Suppress("UNCHECKED_CAST")
+                bundle.putStringArray(key, value as Array<String?>)
+            }
+        }
     }
 
     private fun resetConfig() {

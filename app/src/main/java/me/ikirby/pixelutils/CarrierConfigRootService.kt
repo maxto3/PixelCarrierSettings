@@ -13,8 +13,15 @@ class CarrierConfigRootService : RootService() {
         private const val TAG = "CarrierConfigRootSvc"
     }
 
-    init {
-        HiddenApiBypass.setHiddenApiExemptions("L")
+    override fun onCreate() {
+        super.onCreate()
+        Log.i(TAG, "CarrierConfigRootService created (UID: ${android.os.Process.myUid()}, PID: ${android.os.Process.myPid()})")
+        try {
+            HiddenApiBypass.setHiddenApiExemptions("L")
+            Log.i(TAG, "HiddenApiBypass exemptions set")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set HiddenApiBypass exemptions", e)
+        }
     }
 
     override fun onBind(intent: android.content.Intent): IBinder {

@@ -31,8 +31,15 @@ object CarrierConfigPersistence {
     // Separator for array elements
     private const val ARRAY_SEP = "\u001E" // ASCII Record Separator
 
-    private fun getPrefs(context: Context): SharedPreferences =
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private fun getPrefs(context: Context): SharedPreferences {
+        // Use device-protected storage to ensure access before first unlock (Direct Boot)
+        val deContext = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+            context.createDeviceProtectedStorageContext()
+        } else {
+            context
+        }
+        return deContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
 
     private fun prefKey(subId: Int, key: String): String = "${PREFIX}${subId}_$key"
     private fun typeKey(subId: Int, key: String): String = "${prefKey(subId, key)}__type"
@@ -40,26 +47,32 @@ object CarrierConfigPersistence {
 
     /**
      * Save a [PersistableBundle] to SharedPreferences for the given [subId].
-     * Passing `null` clears all saved overrides for this subId.
+     * If [merge] is true, new keys are added to existing ones.
+     * Passing `null` overrides with [merge]=false clears all saved overrides for this subId.
      */
-    fun saveOverrides(context: Context, subId: Int, overrides: PersistableBundle?) {
+    fun saveOverrides(context: Context, subId: Int, overrides: PersistableBundle?, merge: Boolean = true) {
         val prefs = getPrefs(context)
         val edit = prefs.edit()
 
-        // Clear any previously stored overrides for this subId
-        val prevKeys = prefs.getString(keysKey(subId), "")?.split(",")?.filter { it.isNotEmpty() }.orEmpty()
-        for (k in prevKeys) {
-            edit.remove(prefKey(subId, k))
-            edit.remove(typeKey(subId, k))
+        val existingKeys = prefs.getString(keysKey(subId), "")?.split(",")?.filter { it.isNotEmpty() }?.toMutableSet() ?: mutableSetOf()
+
+        if (!merge || overrides == null) {
+            // Clear previous keys if not merging or if resetting
+            for (k in existingKeys) {
+                edit.remove(prefKey(subId, k))
+                edit.remove(typeKey(subId, k))
+            }
+            existingKeys.clear()
         }
 
         if (overrides == null || overrides.isEmpty) {
-            edit.remove(keysKey(subId))
-            edit.apply()
+            if (!merge) {
+                edit.remove(keysKey(subId))
+                edit.apply()
+            }
             return
         }
 
-        val keySet = mutableSetOf<String>()
         for (key in overrides.keySet()) {
             @Suppress("DEPRECATION")
             val obj = overrides.get(key) ?: continue
@@ -81,7 +94,9 @@ object CarrierConfigPersistence {
                 }
                 is Double -> {
                     edit.putString(tk, TYPE_DOUBLE)
-                    edit.putFloat(pk, obj.toFloat()) // SharedPrefs has no putDouble
+                    // PersistableBundle uses Double, SharedPreferences only has Float.
+                    // Store as string to preserve precision.
+                    edit.putString(pk, obj.toString())
                 }
                 is String -> {
                     edit.putString(tk, TYPE_STRING)
@@ -105,15 +120,15 @@ object CarrierConfigPersistence {
                 }
                 is Array<*> -> {
                     // String array
-                    if (obj.all { it is String }) {
+                    if (obj.all { it is String? }) {
                         edit.putString(tk, TYPE_STRING_ARRAY)
                         edit.putString(pk, obj.joinToString(ARRAY_SEP))
                     }
                 }
             }
-            keySet.add(key)
+            existingKeys.add(key)
         }
-        edit.putString(keysKey(subId), keySet.joinToString(","))
+        edit.putString(keysKey(subId), existingKeys.joinToString(","))
         edit.apply()
     }
 
@@ -137,36 +152,59 @@ object CarrierConfigPersistence {
                     TYPE_BOOLEAN -> bundle.putBoolean(key, prefs.getBoolean(pk, false))
                     TYPE_INT -> bundle.putInt(key, prefs.getInt(pk, 0))
                     TYPE_LONG -> bundle.putLong(key, prefs.getLong(pk, 0))
-                    TYPE_DOUBLE -> bundle.putDouble(key, prefs.getFloat(pk, 0f).toDouble())
+                    TYPE_DOUBLE -> {
+                        val s = prefs.getString(pk, null)
+                        if (s != null) bundle.putDouble(key, s.toDouble())
+                    }
                     TYPE_STRING -> bundle.putString(key, prefs.getString(pk, null))
                     TYPE_BOOLEAN_ARRAY -> {
-                        val arr = prefs.getString(pk, "")?.split(ARRAY_SEP)?.map { it.toBooleanStrict() }?.toBooleanArray()
-                        if (arr != null) bundle.putBooleanArray(key, arr)
+                        val s = prefs.getString(pk, "")
+                        if (!s.isNullOrEmpty()) {
+                            bundle.putBooleanArray(key, s.split(ARRAY_SEP).map { it.toBoolean() }.toBooleanArray())
+                        } else {
+                            bundle.putBooleanArray(key, booleanArrayOf())
+                        }
                     }
                     TYPE_INT_ARRAY -> {
-                        val arr = prefs.getString(pk, "")?.split(ARRAY_SEP)?.map { it.toInt() }?.toIntArray()
-                        if (arr != null) bundle.putIntArray(key, arr)
+                        val s = prefs.getString(pk, "")
+                        if (!s.isNullOrEmpty()) {
+                            bundle.putIntArray(key, s.split(ARRAY_SEP).map { it.toInt() }.toIntArray())
+                        } else {
+                            bundle.putIntArray(key, intArrayOf())
+                        }
                     }
                     TYPE_LONG_ARRAY -> {
-                        val arr = prefs.getString(pk, "")?.split(ARRAY_SEP)?.map { it.toLong() }?.toLongArray()
-                        if (arr != null) bundle.putLongArray(key, arr)
+                        val s = prefs.getString(pk, "")
+                        if (!s.isNullOrEmpty()) {
+                            bundle.putLongArray(key, s.split(ARRAY_SEP).map { it.toLong() }.toLongArray())
+                        } else {
+                            bundle.putLongArray(key, longArrayOf())
+                        }
                     }
                     TYPE_DOUBLE_ARRAY -> {
-                        val arr = prefs.getString(pk, "")?.split(ARRAY_SEP)?.map { it.toDouble() }?.toDoubleArray()
-                        if (arr != null) bundle.putDoubleArray(key, arr)
+                        val s = prefs.getString(pk, "")
+                        if (!s.isNullOrEmpty()) {
+                            bundle.putDoubleArray(key, s.split(ARRAY_SEP).map { it.toDouble() }.toDoubleArray())
+                        } else {
+                            bundle.putDoubleArray(key, doubleArrayOf())
+                        }
                     }
                     TYPE_STRING_ARRAY -> {
-                        val arr = prefs.getString(pk, "")?.split(ARRAY_SEP)?.toTypedArray()
-                        if (arr != null && arr.isNotEmpty()) bundle.putStringArray(key, arr)
+                        val s = prefs.getString(pk, "")
+                        if (!s.isNullOrEmpty()) {
+                            bundle.putStringArray(key, s.split(ARRAY_SEP).toTypedArray())
+                        } else {
+                            bundle.putStringArray(key, arrayOf())
+                        }
                     }
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 // Skip corrupted entries
+                android.util.Log.w("CarrierConfigPersistence", "Failed to load key $key", e)
             }
         }
         return if (bundle.isEmpty) null else bundle
     }
-
     /**
      * Clear all saved overrides for a given [subId].
      */
@@ -189,5 +227,25 @@ object CarrierConfigPersistence {
         val prefs = getPrefs(context)
         val keys = prefs.getString(keysKey(subId), "")?.split(",")?.filter { it.isNotEmpty() }.orEmpty()
         return keys.isNotEmpty()
+    }
+
+    /**
+     * Scans SharedPreferences for all subIds that have persisted overrides.
+     */
+    fun getSubIdsWithOverrides(context: Context): List<Int> {
+        val prefs = getPrefs(context)
+        val subIds = mutableSetOf<Int>()
+        val prefix = "override_"
+        for (key in prefs.all.keys) {
+            if (key.startsWith(prefix) && key.endsWith("_keys") && key != "${prefix}keys") {
+                // Key format: override_{subId}_keys
+                val subIdStr = key.removePrefix(prefix).removeSuffix("_keys")
+                val subId = subIdStr.toIntOrNull()
+                if (subId != null) {
+                    subIds.add(subId)
+                }
+            }
+        }
+        return subIds.toList().sorted()
     }
 }
