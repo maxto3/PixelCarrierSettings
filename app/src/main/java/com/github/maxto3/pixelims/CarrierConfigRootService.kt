@@ -1,6 +1,7 @@
 package com.github.maxto3.pixelims
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Binder
 import android.os.IBinder
 import android.os.PersistableBundle
@@ -8,11 +9,16 @@ import android.util.Log
 import com.topjohnwu.superuser.ipc.RootService
 import com.github.maxto3.pixelims.BuildConfig
 import org.lsposed.hiddenapibypass.HiddenApiBypass
+import java.lang.reflect.Method
 
 class CarrierConfigRootService : RootService() {
 
     companion object {
         private const val TAG = "CarrierConfigRootSvc"
+
+        @Volatile private var cachedTelephonyStubPair: Pair<Class<*>, Method>? = null
+        @Volatile private var cachedIsubStubPair: Pair<Class<*>, Method>? = null
+        @Volatile private var cachedCclStubPair: Pair<Class<*>, Method>? = null
     }
 
     private var appUid: Int = -1
@@ -33,8 +39,16 @@ class CarrierConfigRootService : RootService() {
         return object : ICarrierConfigRootService.Stub() {
 
             private fun checkCaller() {
-                require(Binder.getCallingUid() == appUid) {
-                    "IPC call rejected: unauthorized UID ${Binder.getCallingUid()}"
+                val callingUid = Binder.getCallingUid()
+                require(callingUid == appUid) {
+                    "IPC call rejected: unauthorized UID $callingUid"
+                }
+                val packages = packageManager.getPackagesForUid(callingUid).orEmpty()
+                if (packages.isNotEmpty()) {
+                    val signatureMatch = packageManager.checkSignatures(packageName, packages[0])
+                    require(signatureMatch == PackageManager.SIGNATURE_MATCH) {
+                        "IPC call rejected: signature mismatch for UID $callingUid"
+                    }
                 }
             }
 
@@ -82,7 +96,11 @@ class CarrierConfigRootService : RootService() {
 
     private fun getTelephony(): Any? {
         val stub = getService("phone") ?: return null
+        val pair = cachedTelephonyStubPair ?: resolveTelephonyStubInfo().also { cachedTelephonyStubPair = it }
+        return pair?.let { it.second.invoke(null, stub) }
+    }
 
+    private fun resolveTelephonyStubInfo(): Pair<Class<*>, Method>? {
         val candidateNames = listOf(
             "com.android.internal.telephony.ITelephony\$Stub",
             "com.android.internal.telephony.ITelephony",
@@ -95,14 +113,13 @@ class CarrierConfigRootService : RootService() {
                     it.name == "asInterface" && it.parameterTypes.size == 1
                 }
                 if (asInterface != null) {
-                    Log.d(TAG, "ITelephony resolved via $name")
-                    return asInterface.invoke(null, stub)
+                    Log.d(TAG, "ITelephony resolved via $name (cached)")
+                    return Pair(cls, asInterface)
                 }
             } catch (_: ReflectiveOperationException) {
                 Log.d(TAG, "ITelephony candidate $name not found, trying next")
             }
         }
-
         Log.e(TAG, "Failed to get ITelephony via any known path")
         return null
     }
@@ -110,50 +127,24 @@ class CarrierConfigRootService : RootService() {
     private fun getCarrierConfigLoader(): Any? {
         val stub = getService("carrier_config") ?: return null
 
-        // Attempt 1: find asInterface by method name (any parameter count)
-        try {
-            val stubClass = Class.forName("com.android.internal.telephony.ICarrierConfigLoader\$Stub")
-            Log.d(TAG, "Attempt 1: Stub class = ${stubClass.name}")
-            if (BuildConfig.DEBUG) {
-                // Dump all declared methods to understand class structure
-                for (m in stubClass.declaredMethods) {
-                    Log.i(TAG, "  method: ${m.name}(${m.parameterTypes.map { it.simpleName }.joinToString()}) -> ${m.returnType.simpleName}")
-                }
-                for (f in stubClass.declaredFields) {
-                    Log.i(TAG, "  field: ${f.name} : ${f.type.simpleName} = ${f.get(null)}")
-                }
+        // Fast path: use cached Stub class / asInterface method pair
+        cachedCclStubPair?.let { (_, method) ->
+            try {
+                return method.invoke(null, stub)
+            } catch (_: Exception) {
+                cachedCclStubPair = null // invalidate on failure
             }
-            // Search for any method named "asInterface"
-            val asInterfaceMethod = stubClass.declaredMethods.firstOrNull { it.name == "asInterface" && it.parameterTypes.size == 1 }
-            if (asInterfaceMethod != null) {
-                Log.d(TAG, "  found asInterface: ${asInterfaceMethod}")
-                val result = asInterfaceMethod.invoke(null, stub)
-                Log.d(TAG, "  asInterface returned: ${result?.javaClass?.name}")
-                return result
-            }
-        } catch (e: ReflectiveOperationException) {
-            Log.w(TAG, "Attempt 1 failed: ${e.message}")
         }
 
-        // Attempt 2: try the proxy class itself (ICarrierConfigLoader without $Stub)
-        try {
-            val ifaceClass = Class.forName("com.android.internal.telephony.ICarrierConfigLoader")
-            Log.d(TAG, "Attempt 2: interface class = ${ifaceClass.name}")
-            // Check if this class has Stub inner class
-            for (inner in ifaceClass.declaredClasses) {
-                if (BuildConfig.DEBUG) {
-                    Log.i(TAG, "  inner class: ${inner.simpleName} (${inner.name})")
-                }
-                val asInterfaceMethod = inner.declaredMethods.firstOrNull { it.name == "asInterface" && it.parameterTypes.size == 1 }
-                if (asInterfaceMethod != null) {
-                    Log.d(TAG, "  found asInterface in ${inner.name}: ${asInterfaceMethod}")
-                    val result = asInterfaceMethod.invoke(null, stub)
-                    Log.d(TAG, "  asInterface returned: ${result?.javaClass?.name}")
-                    return result
-                }
+        // Attempt 1:4: search for the right Stub class and asInterface method
+        val pair = resolveCclStubInfo()
+        if (pair != null) {
+            cachedCclStubPair = pair
+            try {
+                return pair.second.invoke(null, stub)
+            } catch (e: Exception) {
+                Log.w(TAG, "Cached CCL asInterface failed", e)
             }
-        } catch (e: ReflectiveOperationException) {
-            Log.w(TAG, "Attempt 2 failed: ${e.message}")
         }
 
         // Attempt 3: queryLocalInterface from the binder proxy directly
@@ -161,21 +152,59 @@ class CarrierConfigRootService : RootService() {
             val descriptor = "com.android.internal.telephony.ICarrierConfigLoader"
             val localInterface = stub.javaClass.getMethod("queryLocalInterface", String::class.java).invoke(stub, descriptor)
             if (localInterface != null) {
-                Log.d(TAG, "Attempt 3: queryLocalInterface returned ${localInterface.javaClass.name}")
+                Log.d(TAG, "queryLocalInterface returned ${localInterface.javaClass.name}")
                 return localInterface
             }
-            Log.d(TAG, "Attempt 3: queryLocalInterface returned null (expected for cross-process)")
         } catch (e: ReflectiveOperationException) {
-            Log.w(TAG, "Attempt 3 failed: ${e.message}")
+            Log.w(TAG, "queryLocalInterface failed", e)
         }
 
-        // Attempt 4: search for any class with "ICarrierConfig" in name and Stub inner
+        Log.e(TAG, "All attempts to get CarrierConfigLoader failed")
+        return null
+    }
+
+    private fun resolveCclStubInfo(): Pair<Class<*>, Method>? {
+        // Attempt 1: ICarrierConfigLoader$Stub directly
         try {
-            // Broad search - look through all loaded classes (expensive, only as last resort)
-            Log.d(TAG, "Attempt 4: searching for Stub class indirectly")
-            // Try the transitive closure of classes in the same package
+            val stubClass = Class.forName("com.android.internal.telephony.ICarrierConfigLoader\$Stub")
+            Log.d(TAG, "Attempt 1: Stub class = ${stubClass.name}")
+            if (BuildConfig.DEBUG) {
+                for (m in stubClass.declaredMethods) {
+                    Log.i(TAG, "  method: ${m.name}(${m.parameterTypes.map { it.simpleName }.joinToString()}) -> ${m.returnType.simpleName}")
+                }
+                for (f in stubClass.declaredFields) {
+                    Log.i(TAG, "  field: ${f.name} : ${f.type.simpleName} = ${f.get(null)}")
+                }
+            }
+            val asInterfaceMethod = stubClass.declaredMethods.firstOrNull { it.name == "asInterface" && it.parameterTypes.size == 1 }
+            if (asInterfaceMethod != null) {
+                Log.d(TAG, "  found asInterface: $asInterfaceMethod (cached)")
+                return Pair(stubClass, asInterfaceMethod)
+            }
+        } catch (e: ReflectiveOperationException) {
+            Log.w(TAG, "Attempt 1 failed: ${e.message}")
+        }
+
+        // Attempt 2: ICarrierConfigLoader interface → inner Stub
+        try {
+            val ifaceClass = Class.forName("com.android.internal.telephony.ICarrierConfigLoader")
+            for (inner in ifaceClass.declaredClasses) {
+                if (BuildConfig.DEBUG) {
+                    Log.i(TAG, "  inner class: ${inner.simpleName} (${inner.name})")
+                }
+                val asInterfaceMethod = inner.declaredMethods.firstOrNull { it.name == "asInterface" && it.parameterTypes.size == 1 }
+                if (asInterfaceMethod != null) {
+                    Log.d(TAG, "  found asInterface in ${inner.name} (cached)")
+                    return Pair(inner, asInterfaceMethod)
+                }
+            }
+        } catch (e: ReflectiveOperationException) {
+            Log.w(TAG, "Attempt 2 failed: ${e.message}")
+        }
+
+        // Attempt 4: broad candidate search (expensive, only as last resort)
+        try {
             val pkg = "com.android.internal.telephony"
-            // Check if there's a known inner class pattern
             val candidateNames = listOf(
                 "$pkg.ICarrierConfigLoader\$Stub",
                 "$pkg.CarrierConfigLoader\$Stub",
@@ -184,10 +213,10 @@ class CarrierConfigRootService : RootService() {
             for (name in candidateNames) {
                 try {
                     val cls = Class.forName(name)
-                    val asInterface = cls.declaredMethods.firstOrNull { m -> m.name == "asInterface" && m.parameterTypes.size == 1 }
+                    val asInterface = cls.declaredMethods.firstOrNull { it.name == "asInterface" && it.parameterTypes.size == 1 }
                     if (asInterface != null) {
-                        Log.d(TAG, "  found via $name: ${asInterface}")
-                        return asInterface.invoke(null, stub)
+                        Log.d(TAG, "  found via $name (cached)")
+                        return Pair(cls, asInterface)
                     }
                 } catch (_: ReflectiveOperationException) {}
             }
@@ -195,13 +224,16 @@ class CarrierConfigRootService : RootService() {
             Log.w(TAG, "Attempt 4 failed: ${e.message}")
         }
 
-        Log.e(TAG, "All attempts to get CarrierConfigLoader failed")
         return null
     }
 
     private fun getISub(): Any? {
         val stub = getService("isub") ?: return null
+        val pair = cachedIsubStubPair ?: resolveISubStubInfo().also { cachedIsubStubPair = it }
+        return pair?.let { it.second.invoke(null, stub) }
+    }
 
+    private fun resolveISubStubInfo(): Pair<Class<*>, Method>? {
         val candidateNames = listOf(
             "com.android.internal.telephony.ISub\$Stub",
             "com.android.internal.telephony.ISub",
@@ -214,14 +246,13 @@ class CarrierConfigRootService : RootService() {
                     it.name == "asInterface" && it.parameterTypes.size == 1
                 }
                 if (asInterface != null) {
-                    Log.d(TAG, "ISub resolved via $name")
-                    return asInterface.invoke(null, stub)
+                    Log.d(TAG, "ISub resolved via $name (cached)")
+                    return Pair(cls, asInterface)
                 }
             } catch (_: ReflectiveOperationException) {
                 Log.d(TAG, "ISub candidate $name not found, trying next")
             }
         }
-
         Log.e(TAG, "Failed to get ISub via any known path")
         return null
     }
@@ -299,13 +330,26 @@ class CarrierConfigRootService : RootService() {
     private fun executeGetConfigCmd(subId: Int): PersistableBundle {
         return try {
             val ccl = getCarrierConfigLoader() ?: return PersistableBundle()
-            val method = ccl.javaClass.getDeclaredMethod(
-                "getConfigForSubId",
-                Int::class.javaPrimitiveType,
-                String::class.java,
-                String::class.java
-            )
-            method.invoke(ccl, subId, "com.github.maxto3.pixelims", null) as? PersistableBundle
+            // Use getMethod instead of getDeclaredMethod: the AIDL Proxy class
+            // does not explicitly declare interface methods, but getMethod searches
+            // the interface hierarchy where the method is defined.
+            val method: java.lang.reflect.Method? = try {
+                ccl.javaClass.getMethod(
+                    "getConfigForSubId",
+                    Int::class.javaPrimitiveType,
+                    String::class.java,
+                    String::class.java
+                )
+            } catch (_: NoSuchMethodException) {
+                // Fallback: try the resolved Stub class
+                cachedCclStubPair?.first?.getMethod(
+                    "getConfigForSubId",
+                    Int::class.javaPrimitiveType,
+                    String::class.java,
+                    String::class.java
+                )
+            }
+            method?.invoke(ccl, subId, packageName, null) as? PersistableBundle
                 ?: PersistableBundle()
         } catch (e: ReflectiveOperationException) {
             Log.e(TAG, "Error getting carrier config", e)
@@ -324,7 +368,7 @@ class CarrierConfigRootService : RootService() {
             )
 
             @Suppress("UNCHECKED_CAST")
-            val subscriptions = method.invoke(isub, "com.github.maxto3.pixelims", null, false) as? List<Any>
+            val subscriptions = method.invoke(isub, packageName, null, false) as? List<Any>
                 ?: return emptyList()
 
             return subscriptions.map { info ->

@@ -18,8 +18,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.topjohnwu.superuser.ipc.RootService
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import kotlin.concurrent.thread
 
 /**
  * Foreground service to handle carrier config restoration.
@@ -46,9 +46,16 @@ class RestorationService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    private val executor = Executors.newSingleThreadExecutor()
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+    }
+
+    override fun onDestroy() {
+        executor.shutdown()
+        super.onDestroy()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -63,7 +70,7 @@ class RestorationService : Service() {
 
         Log.d(TAG, "Starting restoration for subIds: $subIds")
 
-        thread {
+        executor.execute {
             try {
                 performRestoration(subIds)
             } finally {
@@ -128,9 +135,43 @@ class RestorationService : Service() {
     private fun applyToSubId(svc: ICarrierConfigRootService, subId: Int) {
         val overrides = CarrierConfigPersistence.loadOverrides(this, subId) ?: return
         try {
+            // Primary check: skip if the same overrides were already applied in this
+            // process lifetime (checksum-based, works regardless of getCarrierConfig availability).
+            if (!CarrierConfigPersistence.shouldRestore(subId, overrides)) {
+                Log.d(TAG, "Overrides unchanged for subId=$subId - skipping")
+                return
+            }
+
+            // Secondary check: try to compare with current system config (best-effort).
+            // This catches cases where the system already has the desired values even
+            // though our checksum says we haven't applied them yet.
+            val currentConfig = try {
+                svc.getCarrierConfig(subId)
+            } catch (e: Exception) {
+                Log.d(TAG, "getCarrierConfig unavailable for subId=$subId - relying on checksum only")
+                null
+            }
+
+            if (currentConfig != null) {
+                var allMatch = true
+                for (key in overrides.keySet()) {
+                    if (!CarrierConfigPersistence.bundleValuesEqual(overrides, currentConfig, key)) {
+                        Log.d(TAG, "Key '$key' differs from current config for subId=$subId")
+                        allMatch = false
+                        break
+                    }
+                }
+                if (allMatch) {
+                    Log.d(TAG, "All overrides already match current config for subId=$subId - skipping")
+                    CarrierConfigPersistence.markAsRestored(subId, overrides)
+                    return
+                }
+            }
+
             Log.d(TAG, "Applying overrides for subId $subId")
             val success = svc.overrideCarrierConfig(subId, overrides, false)
             if (success) {
+                CarrierConfigPersistence.markAsRestored(subId, overrides)
                 Log.d(TAG, "Success. Resetting IMS for $subId")
                 try {
                     svc.resetIms(subId)

@@ -23,6 +23,7 @@ class ConfigOverridesActivity : Activity() {
 
     private var subId = 0
     private var carrierService: ICarrierConfigRootService? = null
+    private val handler = Handler(Looper.getMainLooper())
 
     // Feature tracking: label -> (statusView, success)
     private data class FeatureStatus(
@@ -93,6 +94,7 @@ class ConfigOverridesActivity : Activity() {
     }
 
     override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
         super.onDestroy()
         RootService.unbind(serviceConnection)
     }
@@ -169,12 +171,12 @@ class ConfigOverridesActivity : Activity() {
             FeatureStep(R.string.step_show_4g, R.string.step_show_4g_done, R.string.step_show_4g_fail, "show_4g") { s -> overrideShow4G(s) },
         )
 
-        val handler = Handler(Looper.getMainLooper())
         var delay = 0L
         val stepInterval = 400L
 
         for ((index, step) in steps.withIndex()) {
             handler.postDelayed({
+                if (isFinishing || isDestroyed) return@postDelayed
                 binding.textProgress.text = getString(step.descriptionResId)
                 try {
                     val success = step.action(svc)
@@ -233,10 +235,16 @@ class ConfigOverridesActivity : Activity() {
         // Handle persistence
         if (overrides == null) {
             CarrierConfigPersistence.clearOverrides(this, subId)
+            CarrierConfigPersistence.clearRestored(subId)
         } else if (persist) {
             // Save the fully merged bundle to ensure all accumulated overrides persist.
             // Using merge=false because mergedOverrides already contains the complete state.
             CarrierConfigPersistence.saveOverrides(this, subId, mergedOverrides, merge = false)
+        }
+
+        // Sync checksum tracking to prevent redundant re-application by RestorationService
+        if (success && mergedOverrides != null) {
+            CarrierConfigPersistence.markAsRestored(subId, mergedOverrides)
         }
 
         return success
@@ -263,8 +271,6 @@ class ConfigOverridesActivity : Activity() {
     private fun resetConfig() {
         val svc = ensureService() ?: return
         applyOverrides(svc, null)
-        // Always clear local persistence on reset
-        CarrierConfigPersistence.clearOverrides(this, subId)
         showToast(R.string.config_reset)
         resetAllStatuses()
     }

@@ -21,6 +21,11 @@ class CarrierConfigReceiver : BroadcastReceiver() {
     companion object {
         private const val TAG = "CarrierConfigReceiver"
         private const val DELAYED_RESTORE_MS = 60_000L
+        private const val DEBOUNCE_WINDOW_MS = 10_000L
+
+        // Track last restoration time per subId to prevent rapid re-triggering.
+        // BroadcastReceiver.onReceive() always runs on the main thread, so a regular Map is safe.
+        private val lastRestoreTimes = mutableMapOf<Int, Long>()
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -31,6 +36,13 @@ class CarrierConfigReceiver : BroadcastReceiver() {
             CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED -> {
                 val subId = intent.getIntExtra(CarrierConfigManager.EXTRA_SUBSCRIPTION_INDEX, -1)
                 if (subId != -1) {
+                    val now = System.currentTimeMillis()
+                    val lastTime = lastRestoreTimes[subId] ?: 0L
+                    if (now - lastTime < DEBOUNCE_WINDOW_MS) {
+                        Log.d(TAG, "Skipping config changed for subId $subId - within debounce window (${now - lastTime}ms < ${DEBOUNCE_WINDOW_MS}ms)")
+                        return
+                    }
+                    lastRestoreTimes[subId] = now
                     Log.d(TAG, "Config changed for subId $subId - starting service")
                     RestorationService.start(context, listOf(subId))
                 }
