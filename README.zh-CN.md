@@ -1,58 +1,66 @@
 # PixelCarrierSettings
 
-在 Pixel 设备上为不受支持地区的运营商启用 VoLTE。
+在 Pixel 设备上为不受支持地区的运营商启用 VoLTE 并覆盖运营商配置。
 
-最初这个应用是为了能一键覆盖特定配置（5G SA 和信号阈值）而开发的。撰写本文时，使用 `setImsProvisioningInt`（来自 [Ims](https://github.com/vvb2060/Ims) 的 1.0 版本，它没有 UI）似乎是为 VoLTE 提供持久化启用的唯一方式（详见下方"覆盖配置"章节），因此我更新了应用并为其制作了界面。
+最初这个应用是为了能一键覆盖特定配置（5G SA 和信号阈值）而开发的。后来 [Ims](https://github.com/vvb2060/Ims) 发现 `setImsProvisioningInt` 可以持久化启用 VoLTE（能在重启后保持，这点与 `overrideConfig` 不同），因此本应用更新后同时提供了 IMS 配置与运营商配置覆盖的界面。
 
 ## 要求
 
 - 一台已获取 **Magisk root** 的 Pixel 设备（KernelSU/APatch 可能也能用，但未经测试）
-- 应用首次启动时会请求 root 权限
+- **Android 14 或更高版本**（SDK 34+）
 - 应用需要 `READ_PHONE_STATE` 权限以检测你的 SIM 卡
+- Android 13+ 设备上应用还会请求 `POST_NOTIFICATIONS` 权限（供前台恢复服务使用）
+- Root 权限通过 libsu 自动检测；如果 Magisk 尚未授权，会弹出授权提示
 
 ## 使用方法
 
-### 启用 VoLTE
+### 主界面 — 启用 VoLTE
 
 1. 安装此应用，启动它，并在 Magisk 提示时授予 root 权限
-2. 为你想要启用的 SIM 卡点击 **Enable VoLTE**
-3. 前往系统设置 - 网络和互联网 - SIM 卡 - 选择你已启用 VoLTE 的那张卡 - 打开 VoLTE（或 4G 通话，取决于运营商配置）
+2. 主界面最多显示两张 SIM 卡，每张卡各四个按钮：
+   - **启用 VoLTE** — 调用 `setImsProvisioningInt` 持久化启用 VoLTE。此设置自身即可在重启后保持。
+   - **恢复 VoLTE 默认行为** — 禁用 IMS 配置，恢复由运营商配置决定 VoLTE 可用性的系统默认行为。
+   - **重置 IMS** — 重启该 SIM 卡的 IMS 服务，适用于在应用覆盖后刷新 IMS 注册状态。
+   - **配置覆盖** — 打开该 SIM 卡独立的运营商配置覆盖页面。
+3. 启用 VoLTE 后，前往系统设置 → 网络和互联网 → SIM 卡 → 选择对应 SIM 卡 → 打开 VoLTE（或 4G 通话，取决于运营商配置）。
+4. 首次重启后可能需要在系统设置中再次打开 VoLTE。之后该 SIM 卡的 VoLTE 应永久保持。
 
-- 如果你在首次使用此方法后重启系统，可能需要在系统设置中重新打开 VoLTE。之后它应该会保持开启状态，无需为同一张 SIM 卡重复操作。与 `overrideConfig` 不同，此方法不会在重启或系统更新后被重置。
-- **恢复 VoLTE 默认行为**：点击按钮禁用某张 SIM 卡的 IMS 配置。这将恢复系统的默认行为，即 VoLTE 可用性由运营商配置决定。
-- **重置 IMS**：点击以重启某张 SIM 卡的 IMS 服务。适用于在应用覆盖后刷新 IMS 注册状态。
+### 配置覆盖页面 — 覆盖运营商配置
 
-### 覆盖配置
+在主界面点击"配置覆盖"进入每张 SIM 卡独立的覆盖页面。运行 **"启用所有功能"** 后，每项功能会显示其状态（已应用 / 已拒绝 / 待处理）。
 
-在"配置覆盖"菜单（每张 SIM 卡独立设置）中，你可以覆盖运营商配置（与 Pixel IMS 相同的功能，但这里提供了一些预设）。运行 **启用所有功能** 后，每项功能都会显示其状态（✅ 已应用 / ❌ 已拒绝 / ○ 待处理）。
+自 Android 16 QPR2 Beta 3 起，非系统应用无法再使用 `persistent=true` 参数调用 `overrideConfig`。作为替代方案，本应用实现了自己的持久化层：
 
-自 Android 16 QPR2 Beta 3 起，非系统应用不再能使用 `persistent=true` 参数调用 `overrideConfig`。作为替代方案，本应用实现了自己的持久化层：
-
-- 打开 **重启后保持设置** 开关以保存你的覆盖项。如果该 SIM 卡已有已保存的覆盖项，开关会自动开启。
-- 每次重启时，前台服务会自动重新应用你保存的覆盖项。该服务会响应 `BOOT_COMPLETED`、`LOCKED_BOOT_COMPLETED` 和 `CARRIER_CONFIG_CHANGED` 广播。
-- 启动后安排了 60 秒的延迟重试，以应对 SystemUI / IMS 尚未就绪的情况。
-- 重新应用覆盖项后，该服务会自动执行 **重置 IMS** 以刷新 IMS 注册状态。
+- 打开 **"重启后保持设置"** 开关以保存你的覆盖项。如果该 SIM 卡已有已保存的覆盖项，开关会自动开启。
+- 每次重启时，前台服务会自动重新应用你保存的覆盖项。`CarrierConfigReceiver` 监听 `BOOT_COMPLETED`、`LOCKED_BOOT_COMPLETED` 和 `CARRIER_CONFIG_CHANGED` 广播。
+  - 启动事件：所有有已保存覆盖项的 SIM 卡均会被恢复，并在 60 秒后进行延迟重试以应对 SystemUI / IMS 尚未就绪的情况。
+  - `CARRIER_CONFIG_CHANGED` 事件：仅恢复受影响的 SIM 卡。
+- 重新应用覆盖项后，该服务会自动执行 **"重置 IMS"** 以刷新 IMS 注册状态。
 - 覆盖项存储在设备保护存储中（支持 Direct Boot），因此可以在首次解锁前访问。
 - 前台服务在恢复过程中会显示低优先级通知（"重新应用运营商配置"），完成后自动关闭。
 
-- **启用所有功能**：按顺序应用以下全部覆盖项，并显示进度和每项功能的状态。
-- **启用 VoLTE**：将 `carrier_volte_available_bool` 设置为 true。如果你在首屏已使用了"启用 VoLTE"选项，则无需此项。
-- **启用 NR(5G) SA**：将 `carrier_nr_availabilities_int_array` 设置为 `[1, 2]`，同时启用 NSA 和 SA。
-- **启用 VoNR(Vo5G)**：将 `vonr_enabled_bool` 和 `vonr_setting_visibility_bool` 设置为 true。VoNR 让设备在通话时保持 5G 连接，而不是回落到 LTE。
-- **启用 VoWiFi**：设置以下选项：
-    * `carrier_wfc_ims_available_bool` → true
-    * `carrier_wfc_supports_wifi_only_bool` → true
-    * `carrier_default_wfc_ims_roaming_enabled_bool` → true
-    * `editable_wfc_mode_bool` → true
-    * `editable_wfc_roaming_mode_bool` → true
-    * `wfc_spn_format_idx_int` → `4`
-- **覆盖 5G 信号阈值**：将 `5g_nr_ssrsrp_thresholds_int_array` 设置为 `[-115, -105, -95, -85]`。这个选项存在的原因是在我的区域使用 AOSP 默认值时，5G 信号只能显示 1 格，但在其他设备上信号是满格或至少 2 格（dBm 值相同）。
-- **禁用信号夸大（5 格变 4 格）**：将 `inflate_signal_strength_bool` 设置为 false。将信号图标从 5 格改为 4 格，在使用双 SIM 卡时还能实现统一信号图标。
-- **在 SIM 状态中显示 IMS 状态**：将 `show_ims_registration_status_bool` 设置为 true。这会在"关于手机 - SIM 卡状态"中添加"IMS 注册状态"。Android 16 QPR3 Beta 1 存在一个错误，打开 PhoneInformation 或 PhoneInformationV2 测试菜单时会导致 `com.android.phone` 崩溃。此选项让你无需进入测试菜单即可查看 IMS 状态。
-- **显示 4G 而不是 LTE**：将 `show_4g_for_lte_data_icon_bool` 设置为 true。将状态栏图标从"LTE"改为"4G"。
-- **重置为系统默认**：清除当前 SIM 卡的所有覆盖项，恢复默认运营商行为。
+#### 可用覆盖项（"启用所有功能"按顺序依次应用）
 
-如果你需要手动/自定义覆盖，请查看 [Pixel IMS](https://github.com/kyujin-cho/pixel-volte-patch)。
+| # | 功能 | 设置的键值 |
+|---|------|-----------|
+| 1 | **启用 VoLTE** | `carrier_volte_available_bool` → `true` |
+| 2 | **启用 NR(5G) SA** | `carrier_nr_availabilities_int_array` → `[1, 2]`（同时启用 NSA 和 SA） |
+| 3 | **启用 VoNR(Vo5G)** | `vonr_enabled_bool` → `true`；`vonr_setting_visibility_bool` → `true` |
+| 4 | **启用 VoWiFi** | `carrier_wfc_ims_available_bool` → `true`；`carrier_wfc_supports_wifi_only_bool` → `true`；`carrier_default_wfc_ims_roaming_enabled_bool` → `true`；`editable_wfc_mode_bool` → `true`；`editable_wfc_roaming_mode_bool` → `true`；`wfc_spn_format_idx_int` → `4` |
+| 5 | **覆盖 5G 信号阈值** | `5g_nr_ssrsrp_thresholds_int_array` → `[-115, -105, -95, -85]` |
+| 6 | **禁用信号夸大** | `inflate_signal_strength_bool` → `false`（5 格变 4 格；双 SIM 卡时还能实现统一信号图标） |
+| 7 | **显示 IMS 状态** | `show_ims_registration_status_bool` → `true`（在关于手机 → SIM 卡状态中添加"IMS 注册状态"） |
+| 8 | **显示 4G 而不是 LTE** | `show_4g_for_lte_data_icon_bool` → `true` |
+
+- **重置为系统默认** — 清除当前 SIM 卡的所有覆盖项，包括会话状态和持久化数据。
+
+## 架构
+
+应用的非 root 界面进程通过 AIDL IPC（libsu RootService）与 root 级别的服务（`CarrierConfigRootService`）通信。Root 服务使用 `HiddenApiBypass` 和反射来访问 Android 隐藏的通讯 API（`ITelephony`、`ICarrierConfigLoader`、`ISub`）。
+
+临时会话覆盖项在内存中累积（`PersistableBundle`）；持久化覆盖项通过 `CarrierConfigPersistence`（类型感知序列化，支持布尔、整型、长整型、双精度浮点、字符串及其数组）存储到设备保护的 `SharedPreferences` 中。
+
+如需手动/自定义覆盖，请参见 [Pixel IMS](https://github.com/kyujin-cho/pixel-volte-patch)。
 
 ## 参考
 
