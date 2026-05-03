@@ -1,4 +1,4 @@
-package me.ikirby.pixelutils
+package com.github.maxto3.pixelims
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -113,7 +113,13 @@ class RestorationService : Service() {
             } else {
                 Log.w(TAG, "CarrierConfigRootService was null after binding")
             }
-            handler.post { try { RootService.unbind(serviceConnection) } catch (_: Exception) {} }
+            handler.post {
+                try {
+                    RootService.unbind(serviceConnection)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Unbind failed (may be expected)", e)
+                }
+            }
         } else {
             Log.w(TAG, "Timed out waiting for root service binding (root may not be available)")
         }

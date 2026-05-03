@@ -6,15 +6,15 @@ plugins {
 }
 
 android {
-    namespace = "me.ikirby.pixelutils"
+    namespace = "com.github.maxto3.pixelims"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "me.ikirby.pixelutils"
+        applicationId = "com.github.maxto3.pixelims"
         minSdk = 34
         targetSdk = 36
-        versionCode = 12
-        versionName = "12"
+        versionCode = 20260504
+        versionName = "20260504"
         setProperty("archivesBaseName", "PixelCarrierSettings")
     }
 
@@ -29,12 +29,12 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlin {
         compilerOptions {
-            jvmTarget = JvmTarget.JVM_1_8
+            jvmTarget = JvmTarget.JVM_17
         }
     }
     buildFeatures {

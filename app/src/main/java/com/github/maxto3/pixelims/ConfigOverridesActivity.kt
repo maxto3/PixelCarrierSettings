@@ -1,4 +1,4 @@
-package me.ikirby.pixelutils
+package com.github.maxto3.pixelims
 
 import android.app.Activity
 import android.content.ComponentName
@@ -15,7 +15,7 @@ import android.view.View
 import android.widget.TextView
 import android.widget.Toast
 import com.topjohnwu.superuser.ipc.RootService
-import me.ikirby.pixelutils.databinding.ActivityConfigOverridesBinding
+import com.github.maxto3.pixelims.databinding.ActivityConfigOverridesBinding
 
 class ConfigOverridesActivity : Activity() {
 
@@ -61,6 +61,12 @@ class ConfigOverridesActivity : Activity() {
         // Initialize persist switch state based on whether we already have saved overrides
         binding.switchPersist.isChecked = CarrierConfigPersistence.hasSavedOverrides(this, subId)
 
+        binding.switchPersist.setOnCheckedChangeListener { _, isChecked ->
+            binding.textOverrideNotes.text = getString(
+                if (isChecked) R.string.override_notes_persisted else R.string.override_notes
+            )
+        }
+
         // Initialize feature statuses (order must match enableAllFeatures steps)
         featureStatuses["volte"] = FeatureStatus(R.string.feat_volte_label, statusView = { binding.textStatusVolte })
         featureStatuses["nr_sa"] = FeatureStatus(R.string.feat_nr_sa_label, statusView = { binding.textStatusNrSa })
@@ -91,9 +97,12 @@ class ConfigOverridesActivity : Activity() {
         RootService.unbind(serviceConnection)
     }
 
-    override fun onMenuItemSelected(featureId: Int, item: MenuItem): Boolean {
-        finish()
-        return true
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        if (item.itemId == android.R.id.home) {
+            finish()
+            return true
+        }
+        return super.onOptionsItemSelected(item)
     }
 
     private fun showToast(resId: Int) {
@@ -199,14 +208,12 @@ class ConfigOverridesActivity : Activity() {
 
             // Then, add the session-accumulated overrides
             for (key in sessionOverrides.keySet()) {
-                @Suppress("DEPRECATION")
-                putInBundle(base, key, sessionOverrides.get(key))
+                putInBundle(base, key, sessionOverrides.getAny(key))
             }
 
             // Finally, add the current new overrides and update the session accumulator
             for (key in overrides.keySet()) {
-                @Suppress("DEPRECATION")
-                val value = overrides.get(key)
+                val value = overrides.getAny(key)
                 putInBundle(base, key, value)
                 putInBundle(sessionOverrides, key, value)
             }

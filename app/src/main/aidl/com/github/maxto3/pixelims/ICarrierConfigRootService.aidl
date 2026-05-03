@@ -1,4 +1,4 @@
-package me.ikirby.pixelutils;
+package com.github.maxto3.pixelims;
 
 import android.os.PersistableBundle;
 

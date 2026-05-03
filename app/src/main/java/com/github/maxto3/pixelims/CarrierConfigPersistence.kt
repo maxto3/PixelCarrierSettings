@@ -1,8 +1,16 @@
-package me.ikirby.pixelutils
+package com.github.maxto3.pixelims
 
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.PersistableBundle
+
+/**
+ * Centrally suppress the DEPRECATION warning for [PersistableBundle.get].
+ * The typed replacement `get(key, defaultValue)` requires knowing the type
+ * at the call site, which is not possible in generic bundle processing.
+ */
+@Suppress("DEPRECATION")
+internal fun PersistableBundle.getAny(key: String): Any? = this.get(key)
 
 /**
  * Persists carrier config overrides to SharedPreferences so they can be
@@ -50,6 +58,7 @@ object CarrierConfigPersistence {
      * If [merge] is true, new keys are added to existing ones.
      * Passing `null` overrides with [merge]=false clears all saved overrides for this subId.
      */
+    @Synchronized
     fun saveOverrides(context: Context, subId: Int, overrides: PersistableBundle?, merge: Boolean = true) {
         val prefs = getPrefs(context)
         val edit = prefs.edit()
@@ -74,8 +83,7 @@ object CarrierConfigPersistence {
         }
 
         for (key in overrides.keySet()) {
-            @Suppress("DEPRECATION")
-            val obj = overrides.get(key) ?: continue
+            val obj = overrides.getAny(key) ?: continue
             val pk = prefKey(subId, key)
             val tk = typeKey(subId, key)
 
@@ -203,11 +211,17 @@ object CarrierConfigPersistence {
                 android.util.Log.w("CarrierConfigPersistence", "Failed to load key $key", e)
             }
         }
-        return if (bundle.isEmpty) null else bundle
+        return if (bundle.isEmpty) {
+            if (keys.isNotEmpty()) {
+                android.util.Log.w("CarrierConfigPersistence", "Keys exist but all values failed to load for subId=$subId — possible data corruption")
+            }
+            null
+        } else bundle
     }
     /**
      * Clear all saved overrides for a given [subId].
      */
+    @Synchronized
     fun clearOverrides(context: Context, subId: Int) {
         val prefs = getPrefs(context)
         val keys = prefs.getString(keysKey(subId), "")?.split(",")?.filter { it.isNotEmpty() }.orEmpty()
@@ -241,7 +255,7 @@ object CarrierConfigPersistence {
                 // Key format: override_{subId}_keys
                 val subIdStr = key.removePrefix(prefix).removeSuffix("_keys")
                 val subId = subIdStr.toIntOrNull()
-                if (subId != null) {
+                if (subId != null && subId >= 0) {
                     subIds.add(subId)
                 }
             }

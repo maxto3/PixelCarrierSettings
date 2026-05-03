@@ -19,6 +19,7 @@
     <string name="override_5g_signal_threshold">Override 5G signal threshold</string>
     <string name="reset_config">Reset to system default</string>
     <string name="override_notes">NOTE: These settings are NOT persistent and will be reset upon system reboot.</string>
+    <string name="override_notes_persisted">NOTE: Settings will persist across reboots (persist switch is enabled).</string>
     <string name="persist_after_reboot">Persist settings after reboot</string>
     <string name="persist_after_reboot_summary">Automatically re-apply config overrides when the device restarts</string>
     <string name="init_failed">Initialization failed</string>
@@ -55,11 +56,11 @@
     <string name="feat_signal_inflate_label">Signal Inflate</string>
     <string name="feat_ims_status_label">IMS Status</string>
     <string name="feat_show_4g_label">Show 4G Icon</string>
-    <string name="feat_enabled">✅ Enabled</string>
-    <string name="feat_disabled">❌ Disabled</string>
-    <string name="feat_status_applied">%s: ✅ Applied</string>
-    <string name="feat_status_rejected">%s: ❌ Rejected</string>
-    <string name="feat_pending">%s: ○ Pending</string>
+    <string name="feat_enabled">✓ Enabled</string>
+    <string name="feat_disabled">✗ Disabled</string>
+    <string name="feat_status_applied">%s: ✓ Applied</string>
+    <string name="feat_status_rejected">%s: ✗ Rejected</string>
+    <string name="feat_pending">%s: - Pending</string>
     <string name="step_volte_fail">VoLTE failed</string>
     <string name="step_nr_sa_fail">NR(5G) SA failed</string>
     <string name="step_vonr_fail">VoNR(Vo5G) failed</string>

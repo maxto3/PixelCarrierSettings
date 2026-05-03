@@ -1,4 +1,4 @@
-package me.ikirby.pixelutils
+package com.github.maxto3.pixelims
 
 import com.topjohnwu.superuser.Shell
 import java.io.IOException
@@ -45,6 +45,7 @@ object RootShell {
      * @return [Shell.Result] from the execution.
      */
     fun exec(vararg commands: String): Shell.Result {
+        require(commands.isNotEmpty()) { "At least one command is required" }
         val job = Shell.cmd(commands[0])
         for (i in 1 until commands.size) {
             job.add(commands[i])
