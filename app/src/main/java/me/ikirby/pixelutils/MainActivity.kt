@@ -25,6 +25,8 @@ class MainActivity : Activity() {
     private lateinit var sub: ISub
     private var subIdPhone0 = 0
     private var subIdPhone1 = 0
+    private var iccid0 = ""
+    private var iccid1 = ""
 
     private val shizukuPermissionListener =
         OnRequestPermissionResultListener { _, grantResult ->
@@ -39,9 +41,14 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
 
         HiddenApiBypass.setHiddenApiExemptions("")
+        ConfigStateManager.init(this)
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        binding.switchAutoApply.setOnCheckedChangeListener { _, isChecked ->
+            ConfigStateManager.isAutoApplyEnabled = isChecked
+        }
 
         binding.btnEnableIMS0.setOnClickListener { enableIMSProvisioning(subIdPhone0) }
         binding.btnResetIMS0.setOnClickListener { resetIMS(subIdPhone0) }
@@ -49,6 +56,7 @@ class MainActivity : Activity() {
             val intent = Intent(this, ConfigOverridesActivity::class.java).apply {
                 putExtra("subId", subIdPhone0)
                 putExtra("displayName", binding.textNameSub0.text.toString())
+                putExtra("iccid", iccid0)
             }
             startActivity(intent)
         }
@@ -60,6 +68,7 @@ class MainActivity : Activity() {
             val intent = Intent(this, ConfigOverridesActivity::class.java).apply {
                 putExtra("subId", subIdPhone1)
                 putExtra("displayName", binding.textNameSub1.text.toString())
+                putExtra("iccid", iccid1)
             }
             startActivity(intent)
         }
@@ -70,6 +79,7 @@ class MainActivity : Activity() {
 
     override fun onStart() {
         super.onStart()
+        binding.switchAutoApply.isChecked = ConfigStateManager.isAutoApplyEnabled
         checkShizukuPermission()
     }
 
@@ -172,6 +182,7 @@ class MainActivity : Activity() {
 
         val first = subscriptions[0]
         subIdPhone0 = first.subscriptionId
+        iccid0 = first.iccId ?: ""
         binding.textNameSub0.text = first.displayName
         binding.layoutSub0.visibility = View.VISIBLE
 
@@ -181,6 +192,7 @@ class MainActivity : Activity() {
             return
         }
         subIdPhone1 = second.subscriptionId
+        iccid1 = second.iccId ?: ""
         binding.textNameSub1.text = second.displayName
         binding.layoutSub1.visibility = View.VISIBLE
     }

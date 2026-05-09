@@ -19,6 +19,8 @@ Originally this app was made because I want to override specific configurations 
 
 From "Config overrides" menu, you can override carrier configurations (the same as what Pixel IMS does, but these are some presets). However, starting with Android 16 QPR2 Beta 3, calling `overrideConfig` with `persistent=true` is no longer possible for non-system apps, so these settings will be reset upon system reboot.
 
+**This app now supports auto-apply on reboot** — enable the toggle and all previously selected overrides are automatically re-applied in the background after every reboot. See [Auto-apply on reboot](#auto-apply-on-reboot) below for details.
+
 - **Enable VoLTE**: Sets `KEY_CARRIER_VOLTE_AVAILABLE_BOOL` to true, not needed if you use the Enable VoLTE option on the first screen.
 - **Enable NR(5G) SA**: Sets `KEY_CARRIER_NR_AVAILABILITIES_INT_ARRAY` to `[1, 2]` which enables both NSA and SA.
 - **Enable VoNR(Vo5G)**: Sets `KEY_VONR_ENABLED_BOOL` and `KEY_VONR_SETTING_VISIBILITY_BOOL` to true. VoNR lets the device stay connected to 5G when calling instead of switching to LTE.
@@ -34,6 +36,36 @@ From "Config overrides" menu, you can override carrier configurations (the same 
 - **Show IMS status in SIM status**: Sets `KEY_SHOW_IMS_REGISTRATION_STATUS_BOOL` to true. This adds `IMS registration state` to About phone - SIM status. Android 16 QPR3 Beta 1 has a bug which crashes `com.android.phone` when opening PhoneInformation or PhoneInformationV2 test menu. This option allows seeing IMS status without going to the menu.
 
 If you need manual/custom overrides, please check out [Pixel IMS](https://github.com/kyujin-cho/pixel-volte-patch).
+
+## Auto-apply on reboot
+
+Since Android 16 QPR2 Beta 3 blocks `overrideConfig(persistent=true)` for non-system apps, carrier config overrides are lost after every reboot. This app solves that by listening for system boot events and re-applying your saved overrides in the background via Shizuku.
+
+### How to use
+
+1. Turn on the **"Auto-apply configs on reboot"** switch on the main screen
+2. Use Config Overrides normally — each selection is automatically remembered per SIM card (keyed by ICCID)
+3. Reboot your device; the app will re-apply all saved overrides without you having to open it
+
+> **Prerequisite**: Shizuku must be running after reboot. If it isn't yet, the app retries with exponential backoff (starting at 10 seconds) until Shizuku becomes available. Even if your SIM has a PIN lock, the app waits for the SIM to become ready before applying.
+
+### How it works
+
+**Persistence** (`ConfigStateManager`)
+- Stores applied override flags per SIM in SharedPreferences, keyed by ICCID so configs survive subId changes across reboots
+- Global toggle controls whether auto-apply is enabled
+
+**Boot trigger** (`BootReceiver`)
+- Registers for `BOOT_COMPLETED` broadcast; enqueues a WorkManager worker when the device finishes booting
+
+**SIM PIN delay handling** (`SimStateReceiver`)
+- Listens for `SIM_STATE_CHANGED` broadcasts; when the SIM transitions to `LOADED` (PIN entered), immediately fires the worker instead of waiting for the next backoff interval
+
+**Background execution** (`AutoApplyWorker` — WorkManager)
+- Obtains the current subscription list through Shizuku (`ISub`), matches each SIM by ICCID against saved configs
+- Launches `InstrumentationHelper` via `startInstrumentation()` to gain shell-level permissions for `CarrierConfigManager.overrideConfig()`
+- Batches all overrides for a single SIM into one instrumentation call for efficiency
+- Retries with exponential backoff (initial 10 s, up to ~5 hours between attempts) so configs are applied within a minute of Shizuku becoming available
 
 ## References
 

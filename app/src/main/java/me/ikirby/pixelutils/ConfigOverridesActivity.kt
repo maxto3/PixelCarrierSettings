@@ -19,6 +19,7 @@ class ConfigOverridesActivity : Activity() {
     private lateinit var binding: ActivityConfigOverridesBinding
 
     private var subId = 0
+    private var iccid = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,6 +28,7 @@ class ConfigOverridesActivity : Activity() {
         setContentView(binding.root)
 
         subId = intent.getIntExtra("subId", 0)
+        iccid = intent.getStringExtra("iccid") ?: ""
         title = intent.getStringExtra("displayName") ?: ""
         actionBar?.setDisplayHomeAsUpEnabled(true)
 
@@ -50,11 +52,10 @@ class ConfigOverridesActivity : Activity() {
         Toast.makeText(this, resId, Toast.LENGTH_SHORT).show()
     }
 
-    private fun overrideConfig(overrides: PersistableBundle?) {
+    private fun overrideConfig(overrides: PersistableBundle?, key: ConfigStateManager.ConfigKey? = null) {
         val args = Bundle().apply {
             putInt("subId", subId)
             putParcelable("overrides", overrides)
-            putBoolean("persistent", false)
         }
         val ams = IActivityManager.Stub.asInterface(
             ShizukuBinderWrapper(ServiceManager.getService(ACTIVITY_SERVICE))
@@ -70,8 +71,10 @@ class ConfigOverridesActivity : Activity() {
             null
         )
         if (overrides == null) {
+            if (iccid.isNotEmpty()) ConfigStateManager.clearConfigs(iccid)
             showToast(R.string.config_reset)
         } else {
+            if (iccid.isNotEmpty() && key != null) ConfigStateManager.markConfigApplied(iccid, key)
             showToast(R.string.config_updated)
         }
     }
@@ -84,14 +87,14 @@ class ConfigOverridesActivity : Activity() {
         val overrides = PersistableBundle().apply {
             putBoolean(CarrierConfigManager.KEY_CARRIER_VOLTE_AVAILABLE_BOOL, true)
         }
-        overrideConfig(overrides)
+        overrideConfig(overrides, ConfigStateManager.ConfigKey.VOLTE)
     }
 
     private fun overrideShowIMSStatus() {
         val overrides = PersistableBundle().apply {
             putBoolean(CarrierConfigManager.KEY_SHOW_IMS_REGISTRATION_STATUS_BOOL, true)
         }
-        overrideConfig(overrides)
+        overrideConfig(overrides, ConfigStateManager.ConfigKey.SHOW_IMS)
     }
 
     private fun overrideVoNR() {
@@ -99,7 +102,7 @@ class ConfigOverridesActivity : Activity() {
             putBoolean(CarrierConfigManager.KEY_VONR_ENABLED_BOOL, true)
             putBoolean(CarrierConfigManager.KEY_VONR_SETTING_VISIBILITY_BOOL, true)
         }
-        overrideConfig(overrides)
+        overrideConfig(overrides, ConfigStateManager.ConfigKey.VONR)
     }
 
     private fun overrideNRMode() {
@@ -112,7 +115,7 @@ class ConfigOverridesActivity : Activity() {
                 )
             )
         }
-        overrideConfig(overrides)
+        overrideConfig(overrides, ConfigStateManager.ConfigKey.NR_MODE)
     }
 
     private fun overrideWFC() {
@@ -124,7 +127,7 @@ class ConfigOverridesActivity : Activity() {
             putBoolean(CarrierConfigManager.KEY_EDITABLE_WFC_ROAMING_MODE_BOOL, true)
             putInt(CarrierConfigManager.KEY_WFC_SPN_FORMAT_IDX_INT, 4)
         }
-        overrideConfig(overrides)
+        overrideConfig(overrides, ConfigStateManager.ConfigKey.WFC)
     }
 
     private fun override5GSignalThreshold() {
@@ -134,20 +137,20 @@ class ConfigOverridesActivity : Activity() {
                 intArrayOf(-115, -105, -95, -85)
             )
         }
-        overrideConfig(overrides)
+        overrideConfig(overrides, ConfigStateManager.ConfigKey.SIGNAL_THRESHOLD)
     }
 
     private fun overrideSignalInflate() {
         val overrides = PersistableBundle().apply {
             putBoolean(CarrierConfigManager.KEY_INFLATE_SIGNAL_STRENGTH_BOOL, false)
         }
-        overrideConfig(overrides)
+        overrideConfig(overrides, ConfigStateManager.ConfigKey.SIGNAL_INFLATE)
     }
 
     private fun overrideShow4G() {
         val overrides = PersistableBundle().apply {
             putBoolean(CarrierConfigManager.KEY_SHOW_4G_FOR_LTE_DATA_ICON_BOOL, true)
         }
-        overrideConfig(overrides)
+        overrideConfig(overrides, ConfigStateManager.ConfigKey.SHOW_4G)
     }
 }
