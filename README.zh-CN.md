@@ -62,6 +62,12 @@
 
 如需手动/自定义覆盖，请参见 [Pixel IMS](https://github.com/kyujin-cho/pixel-volte-patch)。
 
+## 调试日志生成
+
+```bash
+adb logcat -v time CarrierConfigRootSvc:* RestorationService:* CarrierConfigReceiver:* *:S | Tee-Object -FilePath pixelutils.log
+```
+
 ## 参考
 
 - [Pixel IMS](https://github.com/kyujin-cho/pixel-volte-patch)
