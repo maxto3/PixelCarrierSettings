@@ -42,6 +42,7 @@ class ConfigOverridesActivity : Activity() {
                 fs.statusView().text = getString(R.string.feat_pending, getString(fs.labelResId))
                 fs.statusView().setTextColor(Color.GRAY)
             }
+            refreshImsRegistration()
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -77,6 +78,8 @@ class ConfigOverridesActivity : Activity() {
         featureStatuses["signal_inflate"] = FeatureStatus(R.string.feat_signal_inflate_label, statusView = { binding.textStatusSignalInflate })
         featureStatuses["ims_status"] = FeatureStatus(R.string.feat_ims_status_label, statusView = { binding.textStatusImsStatus })
         featureStatuses["show_4g"] = FeatureStatus(R.string.feat_show_4g_label, statusView = { binding.textStatusShow4g })
+        featureStatuses["ut"] = FeatureStatus(R.string.feat_ut_label, statusView = { binding.textStatusUt })
+        featureStatuses["tiktok"] = FeatureStatus(R.string.feat_tiktok_label, statusView = { binding.textStatusTiktok })
 
         // Show "Initializing" placeholders before service connects
         for ((_, fs) in featureStatuses) {
@@ -124,6 +127,34 @@ class ConfigOverridesActivity : Activity() {
         return svc
     }
 
+    /** Displays the live IMS registration state for the selected subscription. */
+    private fun refreshImsRegistration() {
+        val svc = carrierService ?: return
+        Thread {
+            val registered = try {
+                svc.isImsRegistered(subId)
+            } catch (_: Exception) {
+                null
+            }
+            runOnUiThread {
+                val stateRes = when (registered) {
+                    true -> R.string.ims_status_registered
+                    false -> R.string.ims_status_unregistered
+                    else -> R.string.ims_status_unknown
+                }
+                binding.textImsRegistration.text =
+                    getString(R.string.ims_registration_status, getString(stateRes))
+                binding.textImsRegistration.setTextColor(
+                    when (registered) {
+                        true -> Color.parseColor("#4CAF50")
+                        false -> Color.parseColor("#FF5722")
+                        else -> Color.GRAY
+                    }
+                )
+            }
+        }.start()
+    }
+
     private fun updateStatus(key: String, success: Boolean) {
         val fs = featureStatuses[key] ?: return
         fs.applied = success
@@ -169,6 +200,8 @@ class ConfigOverridesActivity : Activity() {
             FeatureStep(R.string.step_signal_inflate, R.string.step_signal_inflate_done, R.string.step_signal_inflate_fail, "signal_inflate") { s -> overrideSignalInflate(s) },
             FeatureStep(R.string.step_ims_status, R.string.step_ims_status_done, R.string.step_ims_status_fail, "ims_status") { s -> overrideShowIMSStatus(s) },
             FeatureStep(R.string.step_show_4g, R.string.step_show_4g_done, R.string.step_show_4g_fail, "show_4g") { s -> overrideShow4G(s) },
+            FeatureStep(R.string.step_ut, R.string.step_ut_done, R.string.step_ut_fail, "ut") { s -> overrideUT(s) },
+            FeatureStep(R.string.step_tiktok, R.string.step_tiktok_done, R.string.step_tiktok_fail, "tiktok") { s -> overrideTikTok(s) },
         )
 
         var delay = 0L
@@ -285,6 +318,26 @@ class ConfigOverridesActivity : Activity() {
     private fun overrideShowIMSStatus(svc: ICarrierConfigRootService): Boolean {
         val overrides = PersistableBundle().apply {
             putBoolean("show_ims_registration_status_bool", true)
+        }
+        return applyOverrides(svc, overrides)
+    }
+
+    private fun overrideUT(svc: ICarrierConfigRootService): Boolean {
+        val overrides = PersistableBundle().apply {
+            putBoolean("carrier_supports_ss_over_ut_bool", true)
+        }
+        return applyOverrides(svc, overrides)
+    }
+
+    /**
+     * Sets a random 3-digit numeric region as the SIM country override.
+     * Some apps (TikTok) use the numeric region to decide content availability,
+     * so a non-CN value bypasses the regional restriction.
+     */
+    private fun overrideTikTok(svc: ICarrierConfigRootService): Boolean {
+        val iso = (1..999).random().toString().padStart(3, '0')
+        val overrides = PersistableBundle().apply {
+            putString("sim_country_iso_override_string", iso)
         }
         return applyOverrides(svc, overrides)
     }

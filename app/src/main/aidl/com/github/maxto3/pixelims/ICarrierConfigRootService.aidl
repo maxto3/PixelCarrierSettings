@@ -9,4 +9,14 @@ interface ICarrierConfigRootService {
     PersistableBundle getCarrierConfig(int subId);
     void resetIms(int subId);
     List<String> getActiveSubscriptions();
+    boolean isImsRegistered(int subId);
+    int getWfcMode();
+    boolean setWfcMode(int mode);
+    boolean sanitizeApnImsType();
+    String getCaptivePortalConfig();
+    boolean applyCaptivePortalCnUrls();
+    boolean restoreCaptivePortalDefaultUrls();
+    String captureLogcat(int lines);
+    String queryApnList();
+    boolean updateApnType(int id, String type);
 }

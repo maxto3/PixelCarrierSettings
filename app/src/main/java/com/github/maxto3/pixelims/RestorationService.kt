@@ -35,6 +35,11 @@ class RestorationService : Service() {
         private const val SERVICE_BIND_TIMEOUT_SECONDS = 25L
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "carrier_config_restoration"
+        private const val KEY_VOIMS_OPT_IN_STATUS = 68
+        private const val PROVISIONING_VALUE_ENABLED = 1
+        private const val WFC_MODE_WIFI_ONLY = 0
+        private const val WFC_MODE_CELLULAR_PREFERRED = 1
+        private const val WFC_MODE_WIFI_PREFERRED = 2
 
         fun start(context: Context, subIds: List<Int>) {
             val intent = Intent(context, RestorationService::class.java).apply {
@@ -116,6 +121,7 @@ class RestorationService : Service() {
             if (svc != null) {
                 for (subId in subIds) {
                     applyToSubId(svc, subId)
+                    ensureImsHealth(svc, subId)
                 }
             } else {
                 Log.w(TAG, "CarrierConfigRootService was null after binding")
@@ -183,6 +189,47 @@ class RestorationService : Service() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error applying to $subId", e)
+        }
+    }
+
+    /**
+     * Keeps the IMS-critical state healthy on boot: VoIMS opt-in (key 68), the APN split
+     * and the Wi-Fi-preferred fallback guard.
+     */
+    private fun ensureImsHealth(svc: ICarrierConfigRootService, subId: Int) {
+        try {
+            if (svc.getImsProvisioningInt(subId, KEY_VOIMS_OPT_IN_STATUS)
+                != PROVISIONING_VALUE_ENABLED
+            ) {
+                svc.setImsProvisioningInt(
+                    subId,
+                    KEY_VOIMS_OPT_IN_STATUS,
+                    PROVISIONING_VALUE_ENABLED
+                )
+                Log.i(TAG, "VoIMS opt-in enabled for subId=$subId")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "VoIMS opt-in check failed for subId=$subId", e)
+        }
+
+        try {
+            val mode = svc.getWfcMode()
+            if (mode == WFC_MODE_WIFI_PREFERRED || mode == WFC_MODE_WIFI_ONLY) {
+                if (!svc.isImsRegistered(subId)) {
+                    svc.setWfcMode(WFC_MODE_CELLULAR_PREFERRED)
+                    Log.i(TAG, "WFC mode $mode fell back to cellular for subId=$subId")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "WFC guard failed for subId=$subId", e)
+        }
+
+        try {
+            if (svc.sanitizeApnImsType()) {
+                Log.i(TAG, "APN ims type sanitized")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "APN sanitize failed", e)
         }
     }
 

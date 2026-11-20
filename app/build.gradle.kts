@@ -1,8 +1,16 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
+}
+
+val signProps = Properties().apply {
+    val localProperties = rootProject.file("local.properties")
+    if (localProperties.exists()) {
+        localProperties.inputStream().use { load(it) }
+    }
 }
 
 android {
@@ -18,6 +26,22 @@ android {
         setProperty("archivesBaseName", "PixelCarrierSettings")
     }
 
+    signingConfigs {
+        create("release") {
+            val storePath = signProps.getProperty("SIGN_KEY_STORE_FILE")
+                ?: System.getenv("SIGN_KEY_STORE_FILE")
+            if (!storePath.isNullOrBlank()) {
+                storeFile = file(storePath)
+                storePassword = signProps.getProperty("SIGN_KEY_STORE_PASSWORD")
+                    ?: System.getenv("SIGN_KEY_STORE_PASSWORD")
+                keyAlias = signProps.getProperty("SIGN_KEY_ALIAS")
+                    ?: System.getenv("SIGN_KEY_ALIAS")
+                keyPassword = signProps.getProperty("SIGN_KEY_PASSWORD")
+                    ?: System.getenv("SIGN_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -26,6 +50,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

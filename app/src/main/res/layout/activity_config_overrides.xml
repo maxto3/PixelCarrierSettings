@@ -137,6 +137,31 @@
             android:textSize="14sp"
             android:text="@string/initializing" />
 
+        <TextView
+            android:id="@+id/textStatusUt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textSize="14sp"
+            android:text="@string/initializing" />
+
+        <TextView
+            android:id="@+id/textStatusTiktok"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textSize="14sp"
+            android:text="@string/initializing" />
+
+        <TextView
+            android:id="@+id/textImsRegistration"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:text="@string/initializing" />
+
     </LinearLayout>
 
 </ScrollView>

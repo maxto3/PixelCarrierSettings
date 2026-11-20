@@ -1,7 +1,9 @@
 package com.github.maxto3.pixelims
 
+import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Binder
 import android.os.IBinder
 import android.os.PersistableBundle
@@ -15,6 +17,11 @@ class CarrierConfigRootService : RootService() {
 
     companion object {
         private const val TAG = "CarrierConfigRootSvc"
+        private const val WFC_MODE_KEY = "wfc_ims_mode"
+        private const val KEY_CAPTIVE_PORTAL_HTTP_URL = "captive_portal_http_url"
+        private const val KEY_CAPTIVE_PORTAL_HTTPS_URL = "captive_portal_https_url"
+        private const val CN_HTTP_URL = "http://connectivitycheck.gstatic.cn/generate_204"
+        private const val CN_HTTPS_URL = "https://www.google.cn/generate_204"
 
         @Volatile private var cachedTelephonyStubPair: Pair<Class<*>, Method>? = null
         @Volatile private var cachedIsubStubPair: Pair<Class<*>, Method>? = null
@@ -80,6 +87,104 @@ class CarrierConfigRootService : RootService() {
             override fun getActiveSubscriptions(): List<String> {
                 checkCaller()
                 return executeGetSubscriptionsCmd()
+            }
+
+            override fun isImsRegistered(subId: Int): Boolean {
+                checkCaller()
+                return executeIsImsRegisteredCmd(subId)
+            }
+
+            override fun getWfcMode(): Int {
+                checkCaller()
+                return executeGetWfcModeCmd()
+            }
+
+            override fun setWfcMode(mode: Int): Boolean {
+                checkCaller()
+                return executeSetWfcModeCmd(mode)
+            }
+
+            override fun sanitizeApnImsType(): Boolean {
+                checkCaller()
+                return executeSanitizeApnImsCmd()
+            }
+
+            override fun getCaptivePortalConfig(): String {
+                checkCaller()
+                val http = execSettings("get", "global", KEY_CAPTIVE_PORTAL_HTTP_URL)
+                    .takeUnless { it.isBlank() || it == "null" }.orEmpty()
+                val https = execSettings("get", "global", KEY_CAPTIVE_PORTAL_HTTPS_URL)
+                    .takeUnless { it.isBlank() || it == "null" }.orEmpty()
+                return "$http|$https"
+            }
+
+            override fun applyCaptivePortalCnUrls(): Boolean {
+                checkCaller()
+                return try {
+                    execSettings("put", "global", KEY_CAPTIVE_PORTAL_HTTP_URL, CN_HTTP_URL)
+                    execSettings("put", "global", KEY_CAPTIVE_PORTAL_HTTPS_URL, CN_HTTPS_URL)
+                    getCaptivePortalConfig() == "$CN_HTTP_URL|$CN_HTTPS_URL"
+                } catch (e: Throwable) {
+                    Log.e(TAG, "Error applying captive portal URLs", e)
+                    false
+                }
+            }
+
+            override fun restoreCaptivePortalDefaultUrls(): Boolean {
+                checkCaller()
+                return try {
+                    execSettings("delete", "global", KEY_CAPTIVE_PORTAL_HTTP_URL)
+                    execSettings("delete", "global", KEY_CAPTIVE_PORTAL_HTTPS_URL)
+                    val current = getCaptivePortalConfig()
+                    current == "|"
+                } catch (e: Throwable) {
+                    Log.e(TAG, "Error restoring captive portal URLs", e)
+                    false
+                }
+            }
+
+            override fun captureLogcat(lines: Int): String {
+                checkCaller()
+                return try {
+                    val process = Runtime.getRuntime().exec(
+                        arrayOf("/system/bin/logcat", "-d", "-t", lines.coerceIn(100, 20000).toString())
+                    )
+                    val output = process.inputStream.bufferedReader().readText()
+                    process.waitFor()
+                    output
+                } catch (e: Throwable) {
+                    Log.e(TAG, "Error capturing logcat", e)
+                    ""
+                }
+            }
+
+            override fun queryApnList(): String {
+                checkCaller()
+                return try {
+                    execContent(
+                        "query",
+                        "--uri", "content://telephony/carriers",
+                        "--projection", "_id,apn,type"
+                    )
+                } catch (e: Throwable) {
+                    Log.e(TAG, "Error querying APNs", e)
+                    ""
+                }
+            }
+
+            override fun updateApnType(id: Int, type: String): Boolean {
+                checkCaller()
+                return try {
+                    execContent(
+                        "update",
+                        "--uri", "content://telephony/carriers/$id",
+                        "--bind", "type:s:$type"
+                    )
+                    true
+                } catch (e: Throwable) {
+                    Log.e(TAG, "Error updating APN type", e)
+                    false
+                }
             }
         }
     }
@@ -382,5 +487,119 @@ class CarrierConfigRootService : RootService() {
             Log.e(TAG, "Error getting subscriptions", e)
             return emptyList()
         }
+    }
+
+    private fun executeIsImsRegisteredCmd(subId: Int): Boolean {
+        return try {
+            val telephony = getTelephony() ?: return false
+            val method = telephony.javaClass.getMethod(
+                "isImsRegistered",
+                Int::class.javaPrimitiveType
+            )
+            method.invoke(telephony, subId) as? Boolean ?: false
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error reading IMS registration state", e)
+            false
+        }
+    }
+
+    private fun executeGetWfcModeCmd(): Int {
+        return try {
+            val isub = getISub() ?: return -1
+            val subId = executeGetSubscriptionsCmd()
+                .firstOrNull()?.substringBefore(":")?.toIntOrNull() ?: return -1
+            val method = isub.javaClass.getMethod(
+                "getSubscriptionProperty",
+                Int::class.javaPrimitiveType,
+                String::class.java,
+                String::class.java,
+                String::class.java
+            )
+            val value = method.invoke(isub, subId, WFC_MODE_KEY, packageName, null) as? String
+            value?.toIntOrNull() ?: -1
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error reading WFC mode", e)
+            -1
+        }
+    }
+
+    private fun executeSetWfcModeCmd(mode: Int): Boolean {
+        return try {
+            val isub = getISub() ?: return false
+            val subId = executeGetSubscriptionsCmd()
+                .firstOrNull()?.substringBefore(":")?.toIntOrNull() ?: return false
+            val method = isub.javaClass.getMethod(
+                "setSubscriptionProperty",
+                Int::class.javaPrimitiveType,
+                String::class.java,
+                String::class.java
+            )
+            method.invoke(isub, subId, WFC_MODE_KEY, mode.toString())
+            Log.i(TAG, "WFC mode set to $mode for subId=$subId")
+            true
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error setting WFC mode", e)
+            false
+        }
+    }
+
+    /**
+     * Removes the "ims" type from default APNs when a dedicated IMS APN exists.
+     * A polluted default APN makes Android establish the IMS PDN there and the network
+     * never returns a P-CSCF address, so IMS registration fails.
+     *
+     * The root service process has no registered app record, so ContentResolver cannot
+     * reach the telephony provider; the content CLI runs in its own app process instead.
+     */
+    private fun executeSanitizeApnImsCmd(): Boolean {
+        return try {
+            val output = execContent(
+                "query",
+                "--uri", "content://telephony/carriers",
+                "--projection", "_id,type"
+            )
+            val rows = output.lineSequence().mapNotNull { line ->
+                val id = Regex("_id=(\\d+)").find(line)?.groupValues?.get(1)?.toLongOrNull()
+                    ?: return@mapNotNull null
+                val raw = line.substringAfter("type=", "")
+                id to raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            }.toList()
+
+            val hasDedicatedIms = rows.any { (_, types) -> types.size == 1 && types[0] == "ims" }
+            if (!hasDedicatedIms) {
+                return false
+            }
+
+            var changed = false
+            for ((id, types) in rows) {
+                if (!types.contains("ims") || !types.contains("default")) continue
+                val newType = types.filter { it != "ims" }.joinToString(",")
+                execContent(
+                    "update",
+                    "--uri", "content://telephony/carriers/$id",
+                    "--bind", "type:s:$newType"
+                )
+                changed = true
+                Log.i(TAG, "Removed ims type from APN id=$id -> $newType")
+            }
+            changed
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error sanitizing APN types", e)
+            false
+        }
+    }
+
+    private fun execContent(vararg args: String): String {
+        val process = Runtime.getRuntime().exec(arrayOf("/system/bin/content", *args))
+        val output = process.inputStream.bufferedReader().readText()
+        process.waitFor()
+        return output
+    }
+
+    private fun execSettings(vararg args: String): String {
+        val process = Runtime.getRuntime().exec(arrayOf("/system/bin/settings", *args))
+        val output = process.inputStream.bufferedReader().readText()
+        process.waitFor()
+        return output.trim()
     }
 }
