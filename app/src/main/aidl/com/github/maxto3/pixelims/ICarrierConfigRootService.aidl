@@ -19,4 +19,7 @@ interface ICarrierConfigRootService {
     String captureLogcat(int lines);
     String queryApnList();
     boolean updateApnType(int id, String type);
+    boolean healImsApnType(String mcc, String mnc);
+    boolean healImsApnTypeById(int subId);
+    boolean ensureAdvancedCalling(int subId);
 }

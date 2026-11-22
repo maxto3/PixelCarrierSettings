@@ -35,6 +35,7 @@ class MainActivity : Activity() {
         private const val WFC_MODE_WIFI_ONLY = 0
         private const val WFC_MODE_CELLULAR_PREFERRED = 1
         private const val WFC_MODE_WIFI_PREFERRED = 2
+        private const val APN_HEAL_INTERVAL_MS = 5 * 60 * 1000L
         private const val PERMISSION_REQ_PHONE_STATE = 0
         private const val PERMISSION_REQ_NOTIFICATIONS = 1
         private const val REQUEST_RESTORE = 2
@@ -45,6 +46,11 @@ class MainActivity : Activity() {
 
     private var subIdPhone0 = 0
     private var subIdPhone1 = 0
+    private var subMcc0 = 0
+    private var subMnc0 = 0
+    private var subMcc1 = 0
+    private var subMnc1 = 0
+    private var lastApnHealAtMillis = 0L
     private var carrierService: ICarrierConfigRootService? = null
     private var timeoutRunnable: Runnable? = null
 
@@ -389,6 +395,9 @@ class MainActivity : Activity() {
                             )
                             Log.i(TAG, "VoIMS opt-in enabled for subId=$subId")
                         }
+                        // With voims=1 the user switch no longer falls back to the carrier
+                        // default, so it must be enabled explicitly or VoLTE reads as off.
+                        svc.ensureAdvancedCalling(subId)
                     } catch (e: Exception) {
                         Log.w(TAG, "VoIMS opt-in check failed for subId=$subId", e)
                     }
@@ -415,12 +424,19 @@ class MainActivity : Activity() {
                     Log.w(TAG, "WFC guard failed", e)
                 }
 
-                try {
-                    if (svc.sanitizeApnImsType()) {
-                        Log.i(TAG, "APN ims type sanitized")
+                val now = System.currentTimeMillis()
+                if (now - lastApnHealAtMillis >= APN_HEAL_INTERVAL_MS) {
+                    lastApnHealAtMillis = now
+                    for (subId in subIds) {
+                        try {
+                            val changed = svc.healImsApnTypeById(subId)
+                            if (changed) {
+                                Log.i(TAG, "APN ims type healed for subId=$subId")
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "APN heal failed for subId=$subId", e)
+                        }
                     }
-                } catch (e: Exception) {
-                    Log.w(TAG, "APN sanitize failed", e)
                 }
             } catch (e: Throwable) {
                 Log.e(TAG, "ensureImsHealth failed", e)
@@ -458,6 +474,8 @@ class MainActivity : Activity() {
         }
 
         subIdPhone0 = subscriptions[0].subscriptionId
+        subMcc0 = subscriptions[0].mcc
+        subMnc0 = subscriptions[0].mnc
         binding.textNameSub0.text = subscriptions[0].displayName
         binding.layoutSub0.visibility = View.VISIBLE
 
@@ -466,6 +484,8 @@ class MainActivity : Activity() {
             return
         }
         subIdPhone1 = subscriptions[1].subscriptionId
+        subMcc1 = subscriptions[1].mcc
+        subMnc1 = subscriptions[1].mnc
         binding.textNameSub1.text = subscriptions[1].displayName
         binding.layoutSub1.visibility = View.VISIBLE
     }

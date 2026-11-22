@@ -186,6 +186,48 @@ class CarrierConfigRootService : RootService() {
                     false
                 }
             }
+
+            override fun healImsApnType(mcc: String, mnc: String): Boolean {
+                checkCaller()
+                return try {
+                    healImsApnTypeInternal(mcc.trim(), mnc.trim())
+                } catch (e: Throwable) {
+                    Log.e(TAG, "Error healing APN types", e)
+                    false
+                }
+            }
+
+            override fun healImsApnTypeById(subId: Int): Boolean {
+                checkCaller()
+                return try {
+                    val mccMnc = mccMncForSubscription(subId) ?: return false
+                    healImsApnTypeInternal(mccMnc.first, mccMnc.second)
+                } catch (e: Throwable) {
+                    Log.e(TAG, "Error healing APN types for subId=$subId", e)
+                    false
+                }
+            }
+
+            override fun ensureAdvancedCalling(subId: Int): Boolean {
+                checkCaller()
+                return try {
+                    val telephony = getTelephony() ?: return false
+                    telephony.javaClass.getMethod(
+                        "setAdvancedCallingSettingEnabled",
+                        Int::class.javaPrimitiveType,
+                        Boolean::class.javaPrimitiveType
+                    ).invoke(telephony, subId, true)
+                    telephony.javaClass.getMethod(
+                        "setVoNrEnabled",
+                        Int::class.javaPrimitiveType,
+                        Boolean::class.javaPrimitiveType
+                    ).invoke(telephony, subId, true)
+                    true
+                } catch (e: Throwable) {
+                    Log.w(TAG, "ensure advanced calling failed for subId=$subId", e)
+                    false
+                }
+            }
         }
     }
 
@@ -586,6 +628,106 @@ class CarrierConfigRootService : RootService() {
         } catch (e: Throwable) {
             Log.e(TAG, "Error sanitizing APN types", e)
             false
+        }
+    }
+
+    private data class ApnTypeRow(val id: Long, val apn: String, val type: String)
+    private fun queryApnRows(numeric: String?): List<ApnTypeRow> {
+        val args = mutableListOf(
+            "query",
+            "--uri", "content://telephony/carriers",
+            "--projection", "_id,apn,type"
+        )
+        if (numeric != null) {
+            args += "--where"
+            args += "numeric=$numeric"
+        }
+        val output = execContent(*args.toTypedArray())
+        return output.lineSequence().mapNotNull { line ->
+            val id = Regex("_id=(\\d+)").find(line)?.groupValues?.get(1)?.toLongOrNull()
+                ?: return@mapNotNull null
+            val apn = line.substringAfter("apn=", "").substringBefore(", type=")
+            val type = line.substringAfter("type=", "")
+            ApnTypeRow(id, apn, type)
+        }.toList()
+    }
+
+    /**
+     * Repairs IMS APN drift for one carrier: splits "ims" out of any mixed row and creates a
+     * dedicated "ims" APN when none exists. SIM/OTA provisioning can restore the mixed type,
+     * so this is meant to be called repeatedly.
+     */
+    private fun healImsApnTypeInternal(mcc: String, mnc: String): Boolean {
+        if (mcc.length != 3 || mnc.length !in 2..3) {
+            Log.w(TAG, "invalid mcc/mnc for heal: $mcc/$mnc")
+            return false
+        }
+        val numeric = mcc + mnc
+        val rows = queryApnRows(numeric)
+        if (rows.isEmpty()) return false
+        var changed = false
+        for (row in rows) {
+            val types = row.type.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            if (types.size <= 1 || !types.contains("ims")) continue
+            val newType = types.filter { it != "ims" }.joinToString(",")
+            execContent(
+                "update",
+                "--uri", "content://telephony/carriers/${row.id}",
+                "--bind", "type:s:$newType"
+            )
+            changed = true
+            Log.i(TAG, "split ims out of APN id=${row.id} -> $newType")
+        }
+        val hasDedicatedIms = rows.any { row ->
+            row.type.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                .let { it.size == 1 && it[0] == "ims" }
+        }
+        if (!hasDedicatedIms) {
+            execContent(
+                "insert",
+                "--uri", "content://telephony/carriers",
+                "--bind", "name:s:IMS",
+                "--bind", "apn:s:ims",
+                "--bind", "type:s:ims",
+                "--bind", "mcc:s:$mcc",
+                "--bind", "mnc:s:$mnc",
+                "--bind", "numeric:s:$numeric",
+                "--bind", "protocol:s:IPV4V6",
+                "--bind", "roaming_protocol:s:IPV4V6",
+                "--bind", "carrier_enabled:i:1",
+                "--bind", "edited:i:1"
+            )
+            changed = true
+            Log.i(TAG, "created dedicated IMS APN for numeric=$numeric")
+        }
+        return changed
+    }
+
+    private fun mccMncForSubscription(subId: Int): Pair<String, String>? {
+        return try {
+            val isub = getISub() ?: return null
+            val method = isub.javaClass.getDeclaredMethod(
+                "getActiveSubscriptionInfoList",
+                String::class.java,
+                String::class.java,
+                Boolean::class.javaPrimitiveType
+            )
+            @Suppress("UNCHECKED_CAST")
+            val list = method.invoke(isub, packageName, null, false) as? List<Any> ?: return null
+            for (info in list) {
+                val id = info.javaClass.getMethod("getSubscriptionId").invoke(info) as? Int
+                    ?: continue
+                if (id != subId) continue
+                val mcc = (info.javaClass.getMethod("getMccString").invoke(info) as? String)
+                    ?: (info.javaClass.getMethod("getMcc").invoke(info) as? Int)?.toString()
+                val mnc = (info.javaClass.getMethod("getMncString").invoke(info) as? String)
+                    ?: (info.javaClass.getMethod("getMnc").invoke(info) as? Int)?.toString()
+                if (!mcc.isNullOrBlank() && !mnc.isNullOrBlank()) return mcc to mnc
+            }
+            null
+        } catch (e: Throwable) {
+            Log.w(TAG, "mcc/mnc lookup failed for subId=$subId", e)
+            null
         }
     }
 

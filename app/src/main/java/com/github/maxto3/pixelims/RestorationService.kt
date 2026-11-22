@@ -208,6 +208,8 @@ class RestorationService : Service() {
                 )
                 Log.i(TAG, "VoIMS opt-in enabled for subId=$subId")
             }
+            // voims=1 disables the carrier-default fallback of the user switch.
+            svc.ensureAdvancedCalling(subId)
         } catch (e: Exception) {
             Log.w(TAG, "VoIMS opt-in check failed for subId=$subId", e)
         }
