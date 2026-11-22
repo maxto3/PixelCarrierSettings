@@ -21,8 +21,8 @@ android {
         applicationId = "com.github.maxto3.pixelims"
         minSdk = 34
         targetSdk = 36
-        versionCode = 20260504
-        versionName = "20260504"
+        versionCode = 20261122
+        versionName = "20261122"
         setProperty("archivesBaseName", "PixelCarrierSettings")
     }
 
