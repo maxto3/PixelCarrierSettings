@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="more_actions">更多操作</string>
+    <string name="tools_title">工具</string>
+    <string name="enable_voims_persistent">启用 VoLTE（持久化）</string>
+    <string name="restore_voims_default">恢复 VoLTE 默认行为（key 68）</string>
+    <string name="reset_ims_stack">重置 IMS 栈</string>
+    <string name="sim_ops_hint">无法通话时用「启用 VoLTE」；改完配置 IMS 没恢复时用「重置 IMS 栈」。</string>
+    <string name="overrides_hint">这里的开关是 CarrierConfig 覆盖，默认重启失效；开启 Persist 后开机自动重放。需要持久化 VoLTE 请用主界面的「启用 VoLTE（持久化）」。</string>
+</resources>

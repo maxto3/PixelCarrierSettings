@@ -15,6 +15,7 @@ import android.telephony.SubscriptionInfo
 import android.telephony.SubscriptionManager
 import android.util.Log
 import android.view.View
+import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -88,8 +89,7 @@ class MainActivity : Activity() {
             startActivity(Intent(this, ApnEditorActivity::class.java))
         }
 
-        binding.btnEnableIMS0.setOnClickListener { enableIMSProvisioning(subIdPhone0) }
-        binding.btnResetIMS0.setOnClickListener { resetIMS(subIdPhone0) }
+        binding.btnMoreSub0.setOnClickListener { showMoreMenu(it, subIdPhone0) }
         binding.btnConfigOverrides0.setOnClickListener {
             val intent = Intent(this, ConfigOverridesActivity::class.java).apply {
                 putExtra("subId", subIdPhone0)
@@ -97,10 +97,8 @@ class MainActivity : Activity() {
             }
             startActivity(intent)
         }
-        binding.btnDisableIMS0.setOnClickListener { disableIMSProvisioning(subIdPhone0) }
 
-        binding.btnEnableIMS1.setOnClickListener { enableIMSProvisioning(subIdPhone1) }
-        binding.btnResetIMS1.setOnClickListener { resetIMS(subIdPhone1) }
+        binding.btnMoreSub1.setOnClickListener { showMoreMenu(it, subIdPhone1) }
         binding.btnConfigOverrides1.setOnClickListener {
             val intent = Intent(this, ConfigOverridesActivity::class.java).apply {
                 putExtra("subId", subIdPhone1)
@@ -108,13 +106,19 @@ class MainActivity : Activity() {
             }
             startActivity(intent)
         }
-        binding.btnDisableIMS1.setOnClickListener { disableIMSProvisioning(subIdPhone1) }
+
+        binding.root.post { binding.root.scrollTo(0, 0) }
     }
 
     override fun onStart() {
         super.onStart()
         RootShell.refreshRootStatus()
         init()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        binding.root.post { binding.root.scrollTo(0, 0) }
     }
 
     override fun onDestroy() {
@@ -215,6 +219,26 @@ class MainActivity : Activity() {
         } catch (_: Exception) {
             showToast(R.string.init_failed)
         }
+    }
+
+    /**
+     * Groups the secondary per-SIM actions so the main screen stays readable:
+     * enable / restore VoLTE and reset IMS.
+     */
+    private fun showMoreMenu(anchor: View, subId: Int) {
+        val popup = PopupMenu(this, anchor)
+        popup.menu.add(0, 1, 0, R.string.enable_voims_persistent)
+        popup.menu.add(0, 2, 1, R.string.restore_voims_default)
+        popup.menu.add(0, 3, 2, R.string.reset_ims_stack)
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                1 -> enableIMSProvisioning(subId)
+                2 -> disableIMSProvisioning(subId)
+                3 -> resetIMS(subId)
+            }
+            true
+        }
+        popup.show()
     }
 
     /**

@@ -1,27 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fitsSystemWindows="true"
-    tools:context=".MainActivity">
+    android:descendantFocusability="beforeDescendants"
+    android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
         android:orientation="vertical"
         android:padding="16dp">
+
+        <android.widget.TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="24dp"
+            android:paddingBottom="12dp"
+            android:text="@string/app_name"
+            android:textSize="24sp"
+            android:textStyle="bold" />
 
         <TextView
             android:id="@+id/textStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="48dp"
             android:gravity="center"
-            android:text="@string/initializing"
-            android:textColor="?android:textColorPrimary"
-            android:textSize="16sp"
-            android:visibility="visible" />
+            android:padding="24dp"
+            android:textSize="15sp"
+            android:visibility="gone" />
 
         <LinearLayout
             android:id="@+id/contentArea"
@@ -30,141 +38,152 @@
             android:orientation="vertical"
             android:visibility="gone">
 
+            <!-- SIM 1 -->
             <LinearLayout
                 android:id="@+id/layoutSub0"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:visibility="gone">
-
-            <TextView
-                android:id="@+id/textNameSub0"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="4dp"
-                android:textColor="?android:textColorPrimary"
-                android:textSize="18sp"
-                android:textStyle="bold" />
+                android:layout_marginBottom="12dp"
+                android:background="@drawable/card_background"
+                android:orientation="vertical"
+                android:padding="16dp">
 
-            <Button
-                android:id="@+id/btnEnableIMS0"
+                <TextView
+                    android:id="@+id/textNameSub0"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnConfigOverrides0"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/config_overrides"
+                    android:textAllCaps="false" />
+
+                <Button
+                    android:id="@+id/btnMoreSub0"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/more_actions"
+                    android:textAllCaps="false" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/sim_ops_hint"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- SIM 2 -->
+            <LinearLayout
+                android:id="@+id/layoutSub1"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/enable_voims"
-                android:textAllCaps="false" />
+                android:layout_marginBottom="12dp"
+                android:background="@drawable/card_background"
+                android:orientation="vertical"
+                android:padding="16dp">
 
-            <Button
-                android:id="@+id/btnConfigOverrides0"
+                <TextView
+                    android:id="@+id/textNameSub1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnConfigOverrides1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/config_overrides"
+                    android:textAllCaps="false" />
+
+                <Button
+                    android:id="@+id/btnMoreSub1"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/more_actions"
+                    android:textAllCaps="false" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/sim_ops_hint"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- Tools -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/config_overrides"
-                android:textAllCaps="false" />
+                android:background="@drawable/card_background"
+                android:orientation="vertical"
+                android:padding="16dp">
 
-            <Button
-                android:id="@+id/btnDisableIMS0"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/disable_voims"
-                android:textAllCaps="false" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/tools_title"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
 
-            <Button
-                android:id="@+id/btnResetIMS0"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/reset_ims"
-                android:textAllCaps="false" />
+                <TextView
+                    android:id="@+id/btnApnEditor"
+                    style="@style/ToolRow"
+                    android:text="@string/apn_editor" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="?android:attr/listDivider" />
+
+                <TextView
+                    android:id="@+id/btnExportLogcat"
+                    style="@style/ToolRow"
+                    android:text="@string/export_logcat" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="?android:attr/listDivider" />
+
+                <TextView
+                    android:id="@+id/btnBackupConfig"
+                    style="@style/ToolRow"
+                    android:text="@string/backup_config" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="?android:attr/listDivider" />
+
+                <TextView
+                    android:id="@+id/btnRestoreConfig"
+                    style="@style/ToolRow"
+                    android:text="@string/restore_config" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="?android:attr/listDivider" />
+
+                <TextView
+                    android:id="@+id/btnCaptivePortal"
+                    style="@style/ToolRow"
+                    android:text="@string/captive_portal_fix" />
+            </LinearLayout>
 
         </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/layoutSub1"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:orientation="vertical"
-            android:visibility="gone">
-
-            <TextView
-                android:id="@+id/textNameSub1"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="4dp"
-                android:textColor="?android:textColorPrimary"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
-            <Button
-                android:id="@+id/btnEnableIMS1"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/enable_voims"
-                android:textAllCaps="false" />
-
-            <Button
-                android:id="@+id/btnConfigOverrides1"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/config_overrides"
-                android:textAllCaps="false" />
-
-            <Button
-                android:id="@+id/btnDisableIMS1"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/disable_voims"
-                android:textAllCaps="false" />
-
-            <Button
-                android:id="@+id/btnResetIMS1"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/reset_ims"
-                android:textAllCaps="false" />
-
-        </LinearLayout>
-
-        <Button
-            android:id="@+id/btnCaptivePortal"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/captive_portal_fix"
-            android:textAllCaps="false" />
-
-        <Button
-            android:id="@+id/btnExportLogcat"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/export_logcat"
-            android:textAllCaps="false" />
-
-        <Button
-            android:id="@+id/btnBackupConfig"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/backup_config"
-            android:textAllCaps="false" />
-
-        <Button
-            android:id="@+id/btnRestoreConfig"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/restore_config"
-            android:textAllCaps="false" />
-
-        <Button
-            android:id="@+id/btnApnEditor"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/apn_editor"
-            android:textAllCaps="false" />
-
-        </LinearLayout><!-- end contentArea -->
 
     </LinearLayout>
-
 </ScrollView>

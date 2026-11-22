@@ -105,4 +105,11 @@
     <string name="apn_editor_empty">No APNs found</string>
     <string name="apn_editor_type_hint">type</string>
     <string name="apn_editor_updated">APN updated</string>
+    <string name="more_actions">More actions</string>
+    <string name="tools_title">Tools</string>
+    <string name="enable_voims_persistent">Enable VoLTE (persistent)</string>
+    <string name="restore_voims_default">Restore VoLTE default (key 68)</string>
+    <string name="reset_ims_stack">Reset IMS stack</string>
+    <string name="sim_ops_hint">Cannot make calls? Use Enable VoLTE. Config changed but IMS not back? Use Reset IMS.</string>
+    <string name="overrides_hint">These switches are CarrierConfig overrides and are lost on reboot unless Persist is enabled. For persistent VoLTE use Enable VoLTE on the main screen.</string>
 </resources>
