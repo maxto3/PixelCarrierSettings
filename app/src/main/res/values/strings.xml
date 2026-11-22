@@ -59,6 +59,7 @@
     <string name="feat_enabled">✓ Enabled</string>
     <string name="feat_disabled">✗ Disabled</string>
     <string name="feat_status_applied">%s: ✓ Applied</string>
+    <string name="feat_status_disabled">%s: ✗ Not enabled</string>
     <string name="feat_status_rejected">%s: ✗ Rejected</string>
     <string name="feat_pending">%s: - Pending</string>
     <string name="step_volte_fail">VoLTE failed</string>

@@ -60,6 +60,7 @@
     <string name="feat_enabled">✓ 已启用</string>
     <string name="feat_disabled">✗ 未启用</string>
     <string name="feat_status_applied">%s：✓ 已应用</string>
+    <string name="feat_status_disabled">%s：✗ 未启用</string>
     <string name="feat_status_rejected">%s：✗ 被拒绝</string>
     <string name="feat_pending">%s：- 待处理</string>
     <string name="step_volte_fail">VoLTE 启用失败</string>

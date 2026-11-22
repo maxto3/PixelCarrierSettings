@@ -16,8 +16,14 @@ import android.widget.TextView
 import android.widget.Toast
 import com.topjohnwu.superuser.ipc.RootService
 import com.github.maxto3.pixelims.databinding.ActivityConfigOverridesBinding
+import org.json.JSONArray
+import org.json.JSONObject
 
 class ConfigOverridesActivity : Activity() {
+
+    companion object {
+        private const val PREFS_SNAPSHOT = "applied_overrides_snapshot"
+    }
 
     private lateinit var binding: ActivityConfigOverridesBinding
 
@@ -37,11 +43,7 @@ class ConfigOverridesActivity : Activity() {
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             carrierService = ICarrierConfigRootService.Stub.asInterface(service)
-            // Show "Ready" for all features on connect
-            for ((_, fs) in featureStatuses) {
-                fs.statusView().text = getString(R.string.feat_pending, getString(fs.labelResId))
-                fs.statusView().setTextColor(Color.GRAY)
-            }
+            refreshStatuses()
             refreshImsRegistration()
         }
 
@@ -127,9 +129,150 @@ class ConfigOverridesActivity : Activity() {
         return svc
     }
 
-    /** Displays the live IMS registration state for the selected subscription. */
-    private fun refreshImsRegistration() {
+    /**
+     * Reads the effective CarrierConfig and marks each feature as applied or disabled,
+     * instead of leaving everything on "Pending" after re-entering the screen.
+     */
+    private fun refreshStatuses() {
         val svc = carrierService ?: return
+        for ((_, fs) in featureStatuses) {
+            fs.statusView().text = getString(R.string.feat_pending, getString(fs.labelResId))
+            fs.statusView().setTextColor(Color.GRAY)
+        }
+        Thread {
+            val snapshot = loadAppliedSnapshot()
+            val states = if (snapshot != null) {
+                evaluateStatesFromSnapshot(snapshot)
+            } else {
+                runCatching { svc.getCarrierConfig(subId) }.getOrNull()?.let { evaluateStates(it) }
+            }
+            runOnUiThread {
+                if (states != null) renderStates(states)
+            }
+        }.start()
+    }
+
+    private fun evaluateStatesFromSnapshot(snapshot: JSONObject): Map<String, Boolean> {
+        fun bool(key: String, expected: Boolean): Boolean {
+            val entry = snapshot.optJSONObject(key) ?: return false
+            return entry.optString("t") == "bool" && entry.optBoolean("v") == expected
+        }
+
+        val nrArray = snapshot.optJSONObject("carrier_nr_availabilities_int_array")
+            ?.optJSONArray("v")
+        val nrContainsSa = nrArray != null &&
+            (0 until nrArray.length()).any { nrArray.optInt(it) == 2 }
+        val thresholds = snapshot.optJSONObject("5g_nr_ssrsrp_thresholds_int_array")
+            ?.optJSONArray("v")
+        val thresholdMatched = thresholds != null && thresholds.length() == 4 &&
+            thresholds.optInt(0) == -115 && thresholds.optInt(1) == -105 &&
+            thresholds.optInt(2) == -95 && thresholds.optInt(3) == -85
+        val iso = snapshot.optJSONObject("sim_country_iso_override_string")
+            ?.optString("v").orEmpty()
+
+        return mapOf(
+            "volte" to bool("carrier_volte_available_bool", true),
+            "nr_sa" to nrContainsSa,
+            "vonr" to bool("vonr_enabled_bool", true),
+            "wfc" to bool("carrier_wfc_ims_available_bool", true),
+            "5g_threshold" to thresholdMatched,
+            "signal_inflate" to bool("inflate_signal_strength_bool", false),
+            "ims_status" to bool("show_ims_registration_status_bool", true),
+            "show_4g" to bool("show_4g_for_lte_data_icon_bool", true),
+            "ut" to bool("carrier_supports_ss_over_ut_bool", true),
+            "tiktok" to (iso.length == 3 && iso.all { it.isDigit() }),
+        )
+    }
+
+    private fun saveAppliedSnapshot(bundle: PersistableBundle) {
+        val json = JSONObject()
+        for (key in bundle.keySet()) {
+            val value = bundle.get(key) ?: continue
+            json.put(key, encodeValue(value))
+        }
+        getSharedPreferences(PREFS_SNAPSHOT, MODE_PRIVATE).edit()
+            .putString("sub_$subId", json.toString())
+            .apply()
+    }
+
+    private fun loadAppliedSnapshot(): JSONObject? {
+        val raw = getSharedPreferences(PREFS_SNAPSHOT, MODE_PRIVATE)
+            .getString("sub_$subId", null) ?: return null
+        return runCatching { JSONObject(raw) }.getOrNull()
+    }
+
+    private fun clearAppliedSnapshot() {
+        getSharedPreferences(PREFS_SNAPSHOT, MODE_PRIVATE).edit()
+            .remove("sub_$subId")
+            .apply()
+    }
+
+    private fun encodeValue(value: Any?): JSONObject = JSONObject().apply {
+        when (value) {
+            is Boolean -> {
+                put("t", "bool")
+                put("v", value)
+            }
+            is Int -> {
+                put("t", "int")
+                put("v", value)
+            }
+            is Long -> {
+                put("t", "long")
+                put("v", value)
+            }
+            is IntArray -> {
+                put("t", "ints")
+                put("v", JSONArray(value.toList()))
+            }
+            is String -> {
+                put("t", "string")
+                put("v", value)
+            }
+            else -> {
+                put("t", "string")
+                put("v", value?.toString() ?: "")
+            }
+        }
+    }
+
+    private fun evaluateStates(config: PersistableBundle): Map<String, Boolean> {
+        val nrAvailability = config.getIntArray("carrier_nr_availabilities_int_array")
+            ?: intArrayOf()
+        val thresholds = config.getIntArray("5g_nr_ssrsrp_thresholds_int_array")
+            ?: intArrayOf()
+        val iso = config.getString("sim_country_iso_override_string").orEmpty()
+        return mapOf(
+            "volte" to config.getBoolean("carrier_volte_available_bool", false),
+            "nr_sa" to nrAvailability.contains(2),
+            "vonr" to config.getBoolean("vonr_enabled_bool", false),
+            "wfc" to config.getBoolean("carrier_wfc_ims_available_bool", false),
+            "5g_threshold" to thresholds.contentEquals(intArrayOf(-115, -105, -95, -85)),
+            "signal_inflate" to !config.getBoolean("inflate_signal_strength_bool", true),
+            "ims_status" to config.getBoolean("show_ims_registration_status_bool", false),
+            "show_4g" to config.getBoolean("show_4g_for_lte_data_icon_bool", false),
+            "ut" to config.getBoolean("carrier_supports_ss_over_ut_bool", false),
+            "tiktok" to (iso.length == 3 && iso.all { it.isDigit() }),
+        )
+    }
+
+    private fun renderStates(states: Map<String, Boolean>) {
+        for ((key, fs) in featureStatuses) {
+            val enabled = states[key] ?: false
+            fs.applied = enabled
+            val label = getString(fs.labelResId)
+            if (enabled) {
+                fs.statusView().text = getString(R.string.feat_status_applied, label)
+                fs.statusView().setTextColor(Color.parseColor("#4CAF50"))
+            } else {
+                fs.statusView().text = getString(R.string.feat_status_disabled, label)
+                fs.statusView().setTextColor(Color.GRAY)
+            }
+        }
+    }
+
+    /** Displays the live IMS registration state for the selected subscription. */
+    private fun refreshImsRegistration() {        val svc = carrierService ?: return
         Thread {
             val registered = try {
                 svc.isImsRegistered(subId)
@@ -223,6 +366,7 @@ class ConfigOverridesActivity : Activity() {
                 if (index == steps.lastIndex) {
                     binding.textProgress.text = getString(R.string.all_features_done)
                     binding.btnEnableAll.isEnabled = true
+                    handler.postDelayed({ refreshStatuses() }, 500)
                 }
             }, delay)
             delay += stepInterval
@@ -269,10 +413,16 @@ class ConfigOverridesActivity : Activity() {
         if (overrides == null) {
             CarrierConfigPersistence.clearOverrides(this, subId)
             CarrierConfigPersistence.clearRestored(subId)
+            clearAppliedSnapshot()
         } else if (persist) {
             // Save the fully merged bundle to ensure all accumulated overrides persist.
             // Using merge=false because mergedOverrides already contains the complete state.
             CarrierConfigPersistence.saveOverrides(this, subId, mergedOverrides, merge = false)
+        }
+        if (success && mergedOverrides != null) {
+            // Keep a local snapshot regardless of the persist switch so the screen can
+            // show which features are already applied after it is re-opened.
+            saveAppliedSnapshot(mergedOverrides)
         }
 
         // Sync checksum tracking to prevent redundant re-application by RestorationService
@@ -306,6 +456,7 @@ class ConfigOverridesActivity : Activity() {
         applyOverrides(svc, null)
         showToast(R.string.config_reset)
         resetAllStatuses()
+        handler.postDelayed({ refreshStatuses() }, 500)
     }
 
     private fun overrideVoLTE(svc: ICarrierConfigRootService): Boolean {
